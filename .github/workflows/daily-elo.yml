@@ -1,0 +1,44 @@
+name: Daily ELO Pipeline
+
+on:
+  schedule:
+    - cron: '0 9 * * *'   # UTC 09:00 = Pacific 02:00 PDT
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Target date (YYYY-MM-DD). Leave empty for yesterday.'
+        required: false
+      force:
+        description: 'Force re-processing'
+        type: boolean
+        default: false
+
+jobs:
+  daily-elo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily ELO pipeline
+        run: |
+          DATE_ARG=""
+          FORCE_ARG=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            DATE_ARG="--date ${{ github.event.inputs.date }}"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FORCE_ARG="--force"
+          fi
+          python -m scripts.daily_elo $DATE_ARG $FORCE_ARG
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

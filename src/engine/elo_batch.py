@@ -51,15 +51,17 @@ class DailyOhlc:
 class EloBatch:
     """V5.3 ELO 배치 프로세서."""
 
-    def __init__(self, k_factor: float = None, re24_baseline=None, park_factor=None):
+    def __init__(self, k_factor: float = None, re24_baseline=None, park_factor=None,
+                 initial_states: dict[int, PlayerEloState] = None):
         self.calc = EloCalculator(
             k_factor=k_factor or K_FACTOR,
             re24_baseline=re24_baseline,
             park_factor_obj=park_factor,
         )
-        self.players: dict[int, PlayerEloState] = {}
+        self.players: dict[int, PlayerEloState] = dict(initial_states) if initial_states else {}
         self.pa_details: list[dict] = []
         self.daily_ohlc: list[DailyOhlc] = []
+        self._active_player_ids: set[int] = set()
 
         # OHLC 추적용 내부 상태
         self._current_date: Optional[str] = None
@@ -129,6 +131,8 @@ class EloBatch:
 
             batter_id = int(row['batter_id'])
             pitcher_id = int(row['pitcher_id'])
+            self._active_player_ids.add(batter_id)
+            self._active_player_ids.add(pitcher_id)
             batter = self._get_player(batter_id)
             pitcher = self._get_player(pitcher_id)
 
@@ -184,10 +188,17 @@ class EloBatch:
 
         logger.info(f"  Completed {total:,} PAs, {len(self.daily_ohlc):,} OHLC records")
 
-    def get_player_elo_records(self) -> list[dict]:
-        """player_elo 테이블용 레코드 생성."""
+    def get_player_elo_records(self, active_only: bool = False) -> list[dict]:
+        """player_elo 테이블용 레코드 생성.
+
+        Args:
+            active_only: True면 이번 실행에 활동한 선수만 반환 (daily pipeline용)
+        """
+        target_ids = self._active_player_ids if active_only else set(self.players.keys())
         records = []
         for pid, state in self.players.items():
+            if pid not in target_ids:
+                continue
             # 마지막 PA에서 last_game_date 추출
             last_date = None
             for detail in reversed(self.pa_details):
