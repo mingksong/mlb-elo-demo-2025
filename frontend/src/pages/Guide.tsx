@@ -56,14 +56,17 @@ function GeneralTab() {
           For every plate appearance, the ELO points gained by one side are exactly
           equal to the points lost by the other:
         </p>
-        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm">
-          <p>batter_delta = K × delta_run_exp</p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1">
+          <p>adjusted_rv  = delta_run_exp − park_adjustment</p>
+          <p>rv_diff      = adjusted_rv − expected_rv[state]</p>
+          <p>batter_delta = K × rv_diff</p>
           <p>pitcher_delta = −batter_delta</p>
         </div>
         <p>
           This means the league-wide average ELO always stays near 1,500.
           A player's rating only rises by outperforming opponents, not through
-          inflation.
+          inflation. Park factor and base-out state adjustments ensure fair
+          comparison across stadiums and game situations.
         </p>
       </Accordion>
 
@@ -75,12 +78,15 @@ function GeneralTab() {
         <p>
           The key input is <strong>delta_run_exp</strong> (delta run expectancy),
           derived from MLB Statcast data. This measures how much a plate appearance
-          outcome changed the expected runs scored, relative to league average.
+          outcome changed the expected runs scored. Before computing ELO, the raw
+          value is adjusted for <strong>park factor</strong> (venue scoring environment)
+          and <strong>state normalization</strong> (base-out situation average).
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li>A home run might have delta_run_exp ≈ +1.4 → batter gains ~17 ELO</li>
           <li>A strikeout might have delta_run_exp ≈ −0.3 → batter loses ~4 ELO</li>
           <li>A walk might have delta_run_exp ≈ +0.3 → batter gains ~4 ELO</li>
+          <li>At Coors Field (park factor 1.13), positive outcomes are adjusted down to account for the hitter-friendly park</li>
         </ul>
         <p>
           Higher-impact outcomes produce larger ELO swings, making the system
@@ -213,25 +219,31 @@ function DeveloperTab() {
           <p>[Statcast Parquet] → ETL → [Supabase plate_appearances] → ELO Engine → [Supabase player_elo / daily_ohlc]</p>
         </div>
         <p>
-          The system uses a <strong>V5.3 Zero-Sum</strong> ELO engine, adapted from a KBO
-          implementation. Key simplifications for the MLB version:
+          The system uses a <strong>V5.3 Zero-Sum</strong> ELO engine, ported from a KBO
+          implementation with full feature parity:
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Single-dimension ELO (no separate talent/skill component)</li>
           <li>Single season (2025) — no year-over-year normalization</li>
-          <li>No park factor adjustment</li>
-          <li>Direct Statcast delta_run_exp as the input metric</li>
+          <li><strong>State normalization</strong> — adjusts for base-out situation (24 states)</li>
+          <li><strong>Park factor</strong> — adjusts for venue scoring environment (30 stadiums)</li>
+          <li><strong>Field error handling</strong> — prevents unearned ELO credit on errors</li>
+          <li>Statcast delta_run_exp as the input metric</li>
         </ul>
       </Accordion>
 
-      <Accordion title="ELO Calculation Formula">
+      <Accordion title="ELO Calculation Formula (V5.3)">
         <p>
-          For each plate appearance, the ELO update is computed as:
+          For each plate appearance, the ELO update follows three steps:
         </p>
         <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-2">
-          <p><strong>batter_delta</strong> = K × delta_run_exp</p>
+          <p className="text-gray-500"># Step 1: Park factor adjustment</p>
+          <p><strong>adjusted_rv</strong> = delta_run_exp − (park_factor − 1.0) × 0.1</p>
+          <p className="text-gray-500 mt-2"># Step 2: State normalization</p>
+          <p><strong>rv_diff</strong> = adjusted_rv − mean_rv[base_out_state]</p>
+          <p className="text-gray-500 mt-2"># Step 3: ELO update (zero-sum)</p>
+          <p><strong>batter_delta</strong> = K × rv_diff</p>
           <p><strong>pitcher_delta</strong> = −batter_delta</p>
-          <p className="text-gray-500 mt-2">where K = 12.0 (K-Factor)</p>
         </div>
         <p>Parameters:</p>
         <div className="overflow-x-auto">
@@ -259,9 +271,25 @@ function DeveloperTab() {
                 <td className="px-3 py-2">500.0</td>
                 <td className="px-3 py-2">Floor — ELO cannot drop below this value</td>
               </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">ADJUSTMENT_SCALE</td>
+                <td className="px-3 py-2">0.1</td>
+                <td className="px-3 py-2">Park factor RV adjustment scale</td>
+              </tr>
             </tbody>
           </table>
         </div>
+        <p className="mt-2">
+          <strong>State normalization</strong> removes systematic bias from base-out
+          situations (24 states: 8 base configurations × 3 out states). For example,
+          a hit with runners in scoring position carries a higher raw run value than
+          with bases empty — the normalization ensures only above-average outcomes
+          increase ELO.
+        </p>
+        <p>
+          <strong>Field error handling</strong>: When the result is a fielding error,
+          any favorable ELO gain for the batter is zeroed out to prevent unearned credit.
+        </p>
       </Accordion>
 
       <Accordion title="Data Pipeline">
@@ -280,10 +308,11 @@ function DeveloperTab() {
           <li>Extract: batter_id, pitcher_id, game_date, delta_run_exp</li>
           <li>Result: ~183K plate appearances</li>
         </ul>
-        <h4 className="font-semibold mt-2">3. ELO Engine</h4>
+        <h4 className="font-semibold mt-2">3. ELO Engine (V5.3)</h4>
         <ul className="list-disc pl-5 space-y-1">
+          <li>Load RE24 baseline (mean run value per base-out state) and park factors (30 venues)</li>
           <li>Process PAs chronologically (sorted by game_date, at_bat_number)</li>
-          <li>Apply zero-sum ELO formula to each PA</li>
+          <li>Apply V5.3 formula: park adjustment → state normalization → zero-sum ELO</li>
           <li>Output: per-PA ELO detail + daily OHLC aggregation</li>
         </ul>
       </Accordion>
