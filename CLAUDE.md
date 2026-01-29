@@ -5,7 +5,7 @@ MLB Statcast 기반 Dual ELO Rating System
 ## 프로젝트 개요
 
 - **목적**: MLB Statcast 데이터를 활용한 선수 ELO 레이팅
-- **기반**: KBO Dual ELO V4 (balltology-elo) 포팅
+- **기반**: KBO V5.3 Zero-Sum ELO (balltology-elo) 포팅
 - **데이터**: Statcast 2025 (투구 단위 → 타석 단위 변환)
 - **백엔드**: Supabase (PostgreSQL)
 - **설계 문서**: [docs/plans/2026-01-29-mlb-elo-system-design.md](docs/plans/2026-01-29-mlb-elo-system-design.md)
@@ -20,9 +20,11 @@ SUPABASE_KEY=eyJ...
 ```
 
 ### 주요 테이블
-- `plate_appearances`: ~183K 타석 (2025 시즌)
-- `player_elo`: 선수별 ELO 현황
-- `elo_pa_detail`: PA별 ELO 변동 기록
+- `players`: 1,469 선수 메타데이터
+- `plate_appearances`: 183,092 타석 (2025 시즌)
+- `player_elo`: 선수별 ELO 현황 (1,469)
+- `elo_pa_detail`: PA별 ELO 변동 기록 (183,092)
+- `daily_ohlc`: 일별 OHLC 캔들스틱 (69,125)
 
 ### 원본 데이터
 - `/Users/mksong/Documents/mlb-statcast-book/data/raw/statcast_2025.parquet`
@@ -54,16 +56,20 @@ SUPABASE_KEY=eyJ...
 [Statcast Parquet] → ETL → [Supabase plate_appearances] → ELO Engine → [Supabase player_elo]
 ```
 
-### ELO 엔진 (Dual ELO V4)
+### ELO 엔진 (V5.3 Zero-Sum)
 
 | 파라미터 | 값 | 설명 |
 |---------|-----|------|
-| K_BASE | 12.0 | 단일 타석 기본 K-factor |
-| ALPHA | 0.45 | On-base 가중치 (Power = 0.55) |
-| SCALE_ON_BASE | 5.0 | On-base 스케일 |
-| SCALE_POWER | 10.0 | Power 스케일 |
-| FULL_RELIABILITY_PA | 502 | MLB 시즌 평균 PA |
-| DEFAULT_ELO | 1500 | 리그 평균 기준점 |
+| K_FACTOR | 12.0 | K-factor (delta = K × delta_run_exp) |
+| INITIAL_ELO | 1500.0 | 리그 평균 기준점 |
+| MIN_ELO | 500.0 | ELO 하한선 |
+
+**공식**: `batter_delta = K × delta_run_exp`, `pitcher_delta = -batter_delta` (Zero-Sum)
+
+### 프론트엔드
+- **언어**: English
+- **대상**: US MLB fans
+- **목적**: 2025 시즌 ELO 데이터 데모 페이지
 
 ---
 
