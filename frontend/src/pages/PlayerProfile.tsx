@@ -77,10 +77,10 @@ export default function PlayerProfile() {
         <div className="flex items-start gap-6">
           {/* Team Badge */}
           <div
-            className="w-20 h-20 rounded-full flex items-center justify-center border-2"
+            className="w-20 h-20 rounded-full flex items-center justify-center border-2 overflow-hidden"
             style={{ borderColor: teamColor }}
           >
-            <TeamLogo team={player.team} size={52} />
+            <TeamLogo size={72} />
           </div>
 
           {/* Player Info */}

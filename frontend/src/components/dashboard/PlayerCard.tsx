@@ -24,7 +24,7 @@ export default function PlayerCard({ player }: PlayerCardProps) {
       {/* Header: Team & Delta */}
       <div className="flex justify-between items-start mb-4">
         <div className="size-10 bg-gray-100 rounded-full overflow-hidden border border-gray-100 flex items-center justify-center">
-          <TeamLogo team={player.team} size={28} />
+          <TeamLogo size={28} />
         </div>
         <div className="flex flex-col items-end">
           <span className={`${deltaColor} text-sm font-bold flex items-center`}>

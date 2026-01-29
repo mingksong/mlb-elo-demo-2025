@@ -1,30 +1,21 @@
-import { getTeamLogoUrl } from '../../utils/teamLogos';
+import mlbLogo from '../../assets/mlb_logo.png';
 
 interface TeamLogoProps {
-  team: string;
   size?: number;
   className?: string;
 }
 
 /**
- * Displays team logo SVG, falling back to team abbreviation text.
+ * Displays the MLB logo in a circular frame.
  */
-export default function TeamLogo({ team, size = 40, className = '' }: TeamLogoProps) {
-  const logoUrl = getTeamLogoUrl(team);
-
-  if (logoUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt={team}
-        width={size}
-        height={size}
-        className={`object-contain ${className}`}
-      />
-    );
-  }
-
+export default function TeamLogo({ size = 40, className = '' }: TeamLogoProps) {
   return (
-    <span className={`text-xs font-bold text-gray-600 ${className}`}>{team}</span>
+    <img
+      src={mlbLogo}
+      alt="MLB"
+      width={size}
+      height={size}
+      className={`rounded-full object-cover ${className}`}
+    />
   );
 }

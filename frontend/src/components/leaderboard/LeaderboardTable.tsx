@@ -67,7 +67,7 @@ function LeaderboardRow({ player, rank }: { player: LeaderboardPlayer; rank: num
       <td className="px-4 py-3 text-sm font-semibold text-gray-900">{player.full_name}</td>
       <td className="px-4 py-3 text-sm text-gray-600">
         <div className="flex items-center gap-1.5">
-          <TeamLogo team={player.team} size={20} />
+          <TeamLogo size={20} />
           {player.team}
         </div>
       </td>
