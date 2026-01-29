@@ -4,6 +4,7 @@ import EloCandlestickChart from '../components/player/EloCandlestickChart';
 import { getEloTier, getEloTierColor } from '../types/elo';
 import { getTeamBorderColor } from '../utils/teamColors';
 import { usePlayerElo, usePlayerOhlc, usePlayerStats } from '../hooks/useElo';
+import TeamLogo from '../components/common/TeamLogo';
 
 export default function PlayerProfile() {
   const { playerId } = useParams<{ playerId: string }>();
@@ -76,10 +77,10 @@ export default function PlayerProfile() {
         <div className="flex items-start gap-6">
           {/* Team Badge */}
           <div
-            className="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white"
-            style={{ backgroundColor: teamColor }}
+            className="w-20 h-20 rounded-full flex items-center justify-center border-2"
+            style={{ borderColor: teamColor }}
           >
-            {player.team}
+            <TeamLogo team={player.team} size={52} />
           </div>
 
           {/* Player Info */}

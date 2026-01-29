@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import type { LeaderboardPlayer } from '../../api/elo';
 import { getEloTier, getEloTierColor } from '../../types/elo';
+import TeamLogo from '../common/TeamLogo';
 
 interface LeaderboardTableProps {
   players: LeaderboardPlayer[];
@@ -64,7 +65,12 @@ function LeaderboardRow({ player, rank }: { player: LeaderboardPlayer; rank: num
     >
       <td className="px-4 py-3 text-sm font-bold text-gray-400">{rank}</td>
       <td className="px-4 py-3 text-sm font-semibold text-gray-900">{player.full_name}</td>
-      <td className="px-4 py-3 text-sm text-gray-600">{player.team}</td>
+      <td className="px-4 py-3 text-sm text-gray-600">
+        <div className="flex items-center gap-1.5">
+          <TeamLogo team={player.team} size={20} />
+          {player.team}
+        </div>
+      </td>
       <td className={`px-4 py-3 text-sm font-bold text-right ${tierColor}`}>
         {Math.round(player.composite_elo)}
       </td>

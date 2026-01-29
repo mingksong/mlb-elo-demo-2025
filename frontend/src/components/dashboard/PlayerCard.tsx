@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
 import type { HotColdPlayer } from '../../types/elo';
 import { getTeamBorderColor } from '../../utils/teamColors';
+import TeamLogo from '../common/TeamLogo';
 
 interface PlayerCardProps {
   player: HotColdPlayer;
@@ -23,7 +24,7 @@ export default function PlayerCard({ player }: PlayerCardProps) {
       {/* Header: Team & Delta */}
       <div className="flex justify-between items-start mb-4">
         <div className="size-10 bg-gray-100 rounded-full overflow-hidden border border-gray-100 flex items-center justify-center">
-          <span className="text-xs font-bold text-gray-600">{player.team}</span>
+          <TeamLogo team={player.team} size={28} />
         </div>
         <div className="flex flex-col items-end">
           <span className={`${deltaColor} text-sm font-bold flex items-center`}>
