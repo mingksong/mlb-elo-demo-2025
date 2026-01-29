@@ -4,19 +4,30 @@ from src.etl.event_mapper import EVENT_MAP, map_event, VALID_RESULT_TYPES
 
 
 def test_event_map_covers_all_statcast_events():
-    """22개 Statcast events가 모두 매핑되어야 함."""
+    """24개 Statcast events가 모두 매핑되어야 함."""
     statcast_events = [
         'single', 'double', 'triple', 'home_run',
-        'walk', 'intentional_walk', 'hit_by_pitch',
+        'walk', 'intentional_walk', 'intent_walk', 'hit_by_pitch',
         'strikeout', 'strikeout_double_play',
         'field_out', 'force_out', 'triple_play',
         'grounded_into_double_play', 'double_play',
         'sac_fly', 'sac_bunt', 'sac_fly_double_play',
         'fielders_choice', 'fielders_choice_out',
         'field_error', 'catcher_interf', 'other_out',
+        'truncated_pa',
     ]
     for event in statcast_events:
         assert event in EVENT_MAP, f"Missing mapping for: {event}"
+
+
+def test_intent_walk_maps_to_ibb():
+    """intent_walk은 intentional_walk과 동일하게 IBB로 매핑."""
+    assert map_event('intent_walk') == 'IBB'
+
+
+def test_truncated_pa_maps_to_out():
+    """truncated_pa는 미완료 타석으로 OUT 처리."""
+    assert map_event('truncated_pa') == 'OUT'
 
 
 def test_map_event_basic():

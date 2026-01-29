@@ -17,6 +17,7 @@ EVENT_MAP = {
     'home_run': 'HR',
     'walk': 'BB',
     'intentional_walk': 'IBB',
+    'intent_walk': 'IBB',
     'hit_by_pitch': 'HBP',
     'strikeout': 'StrikeOut',
     'strikeout_double_play': 'StrikeOut',
@@ -33,6 +34,7 @@ EVENT_MAP = {
     'field_error': 'E',
     'catcher_interf': 'HBP',
     'other_out': 'OUT',
+    'truncated_pa': 'OUT',
 }
 
 
