@@ -20,7 +20,7 @@ from typing import Optional
 
 import pandas as pd
 
-from src.engine.elo_config import INITIAL_ELO
+from src.engine.elo_config import INITIAL_ELO, K_FACTOR
 from src.engine.elo_calculator import PlayerEloState, EloCalculator
 
 logger = logging.getLogger(__name__)
@@ -51,8 +51,12 @@ class DailyOhlc:
 class EloBatch:
     """V5.3 ELO 배치 프로세서."""
 
-    def __init__(self, k_factor: float = None):
-        self.calc = EloCalculator(k_factor) if k_factor else EloCalculator()
+    def __init__(self, k_factor: float = None, re24_baseline=None, park_factor=None):
+        self.calc = EloCalculator(
+            k_factor=k_factor or K_FACTOR,
+            re24_baseline=re24_baseline,
+            park_factor_obj=park_factor,
+        )
         self.players: dict[int, PlayerEloState] = {}
         self.pa_details: list[dict] = []
         self.daily_ohlc: list[DailyOhlc] = []
@@ -137,8 +141,22 @@ class EloBatch:
             if pd.isna(rv):
                 rv = None
 
+            # Base-out state encoding
+            state = (int(bool(row.get('on_1b')))
+                     + int(bool(row.get('on_2b'))) * 2
+                     + int(bool(row.get('on_3b'))) * 4
+                     + int(row.get('outs_when_up', 0)) * 8)
+
+            home_team = row.get('home_team')
+            result_type = row.get('result_type')
+
             # ELO 계산
-            result = self.calc.process_plate_appearance(batter, pitcher, rv)
+            result = self.calc.process_plate_appearance(
+                batter, pitcher, rv,
+                state=state,
+                home_team=home_team,
+                result_type=result_type,
+            )
 
             # OHLC update (타석 후)
             self._update_ohlc(batter_id, batter.elo)

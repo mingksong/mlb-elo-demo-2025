@@ -8,3 +8,6 @@ MIN_ELO = 500.0
 
 # K-factor (V5.3: K=12 for stable daily volatility)
 K_FACTOR = 12.0
+
+# Park factor RV adjustment scale
+ADJUSTMENT_SCALE = 0.1

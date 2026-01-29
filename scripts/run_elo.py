@@ -25,6 +25,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.engine.elo_batch import EloBatch
 from src.engine.elo_config import INITIAL_ELO
+from src.engine.re24_baseline import RE24Baseline
+from src.engine.park_factor import ParkFactor
 from src.etl.upload_to_supabase import get_supabase_client, upload_table
 
 
@@ -39,7 +41,7 @@ def load_pa_from_supabase(client) -> pd.DataFrame:
     while True:
         response = (
             client.table('plate_appearances')
-            .select('pa_id, game_pk, game_date, batter_id, pitcher_id, result_type, delta_run_exp')
+            .select('pa_id, game_pk, game_date, batter_id, pitcher_id, result_type, delta_run_exp, on_1b, on_2b, on_3b, outs_when_up, home_team')
             .order('game_date')
             .order('pa_id')
             .range(offset, offset + page_size - 1)
@@ -157,45 +159,52 @@ def print_summary(batch: EloBatch):
 
 def main():
     print("=" * 60)
-    print("V5.3 ELO Full Season Pipeline")
+    print("V5.3 ELO Full Season Pipeline (State Norm + Park Factor)")
     print("=" * 60)
 
     # 1. Load PA data
     client = get_supabase_client()
     pa_df = load_pa_from_supabase(client)
 
-    # 2. Run ELO calculation
-    print("\nRunning ELO calculation...")
-    batch = EloBatch()
+    # 2. Load V5.3 support modules
+    print("\nLoading V5.3 modules...")
+    baseline = RE24Baseline()
+    park_factor = ParkFactor()
+    print(f"  RE24 baseline: loaded")
+    print(f"  Park factors: {len(park_factor._park_factors)} teams")
+
+    # 3. Run ELO calculation
+    print("\nRunning ELO calculation (V5.3 state norm + park factor)...")
+    batch = EloBatch(re24_baseline=baseline, park_factor=park_factor)
     batch.process(pa_df)
 
-    # 3. Summary
+    # 4. Summary
     print_summary(batch)
 
-    # 4. Upload results
+    # 5. Upload results
     print("\n" + "=" * 60)
     print("UPLOADING RESULTS TO SUPABASE")
     print("=" * 60)
 
-    # 4a. player_elo
+    # 5a. player_elo
     print("\n--- player_elo ---")
     player_records = batch.get_player_elo_records()
     n = upload_table(client, 'player_elo', player_records, batch_size=500)
     print(f"  Uploaded: {n:,}")
 
-    # 4b. elo_pa_detail
+    # 5b. elo_pa_detail
     print("\n--- elo_pa_detail ---")
     pa_detail_records = prepare_pa_detail_records(batch.pa_details)
     n = upload_table(client, 'elo_pa_detail', pa_detail_records, batch_size=1000)
     print(f"  Uploaded: {n:,}")
 
-    # 4c. daily_ohlc
+    # 5c. daily_ohlc
     print("\n--- daily_ohlc ---")
     ohlc_records = prepare_ohlc_records(batch.daily_ohlc)
     n = upload_table(client, 'daily_ohlc', ohlc_records, batch_size=1000)
     print(f"  Uploaded: {n:,}")
 
-    # 5. Verify
+    # 6. Verify
     print("\n--- Verification ---")
     r = client.table('player_elo').select('player_id', count='exact').execute()
     print(f"  player_elo: {r.count} rows")
