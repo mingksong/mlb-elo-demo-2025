@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { BookOpen, Code, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Code, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
-type Tab = 'general' | 'developer';
+type Tab = 'overview' | 'general' | 'developer';
 
 function Accordion({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -24,6 +24,323 @@ function Accordion({ title, children, defaultOpen = false }: { title: string; ch
           {children}
         </div>
       )}
+    </div>
+  );
+}
+
+function OverviewTab() {
+  return (
+    <div className="space-y-6 text-gray-700 leading-relaxed">
+      {/* Abstract */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Abstract</h3>
+        <p>
+          Traditional baseball statistics evaluate players in isolation. Batting average, ERA, and OPS
+          measure outcomes but ignore context: who was pitching, what was the base-out state, and how
+          does the ballpark affect scoring?
+        </p>
+        <p className="mt-2">
+          This project applies an <strong>ELO rating system</strong> — originally designed for chess — to
+          MLB plate appearances. Each PA is a head-to-head contest between batter and pitcher. The batter's
+          gain is exactly the pitcher's loss (<strong>zero-sum</strong>). The result is a unified scale where
+          1,500 is league average, elite batters climb above 2,000, and dominant pitchers approach 1,900.
+        </p>
+        <p className="mt-2">Three adjustments ensure fairness:</p>
+        <ul className="list-disc pl-5 space-y-1 mt-1">
+          <li><strong>Park factor</strong> — Coors Field inflates run values; Petco Park suppresses them. We normalize.</li>
+          <li><strong>State normalization</strong> — A single with bases loaded has higher raw run value than with bases empty. We subtract the expected run value for each base-out state so only <em>above-average</em> outcomes raise ELO.</li>
+          <li><strong>Field error handling</strong> — Batters don't earn ELO credit for reaching base on fielding errors.</li>
+        </ul>
+      </section>
+
+      {/* Methodology */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Methodology</h3>
+        <p className="font-semibold text-gray-900">ELO Formula (V5.3 Zero-Sum)</p>
+        <p className="mt-1">Every player starts at <strong>1,500</strong> (league average). After each plate appearance:</p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 mt-2">
+          <p className="text-gray-500"># Step 1: Park factor adjustment</p>
+          <p>adjusted_rv = delta_run_exp - (park_factor - 1.0) × 0.1</p>
+          <p className="text-gray-500 mt-2"># Step 2: State normalization</p>
+          <p>rv_diff = adjusted_rv - mean_rv[base_out_state]</p>
+          <p className="text-gray-500 mt-2"># Step 3: Zero-sum ELO update</p>
+          <p>batter_delta  = K × rv_diff</p>
+          <p>pitcher_delta = -batter_delta</p>
+        </div>
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Parameter</th>
+                <th className="px-3 py-2 text-left font-semibold">Value</th>
+                <th className="px-3 py-2 text-left font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-mono">K_FACTOR</td>
+                <td className="px-3 py-2">12.0</td>
+                <td className="px-3 py-2">ELO sensitivity per plate appearance</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">INITIAL_ELO</td>
+                <td className="px-3 py-2">1500.0</td>
+                <td className="px-3 py-2">Starting ELO for all players</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">MIN_ELO</td>
+                <td className="px-3 py-2">500.0</td>
+                <td className="px-3 py-2">Floor (ELO cannot drop below)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">ADJUSTMENT_SCALE</td>
+                <td className="px-3 py-2">0.1</td>
+                <td className="px-3 py-2">Park factor scaling constant</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Data Source */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Data Source</h3>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>MLB Statcast</strong> via Baseball Savant</li>
+          <li><strong>711,897 pitches</strong> aggregated into <strong>183,092 plate appearances</strong></li>
+          <li><strong>2,428 games</strong> across the 2025 season</li>
+          <li><strong>1,469 players</strong> (batters and pitchers)</li>
+        </ul>
+        <p className="mt-3 font-semibold text-gray-900">Key Metric: delta_run_exp</p>
+        <p className="mt-1">
+          The core input is <strong>delta run expectancy</strong> — how much a plate appearance outcome
+          changed the expected runs scored in that inning.
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Outcome</th>
+                <th className="px-3 py-2 text-left font-semibold">Typical delta_run_exp</th>
+                <th className="px-3 py-2 text-left font-semibold">ELO Impact (K=12)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2">Home run</td>
+                <td className="px-3 py-2">+1.4</td>
+                <td className="px-3 py-2">~+17 ELO</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Walk</td>
+                <td className="px-3 py-2">+0.3</td>
+                <td className="px-3 py-2">~+4 ELO</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Strikeout</td>
+                <td className="px-3 py-2">-0.3</td>
+                <td className="px-3 py-2">~-4 ELO</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Double play</td>
+                <td className="px-3 py-2">-0.8</td>
+                <td className="px-3 py-2">~-10 ELO</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* State Normalization & Park Factor */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Adjustments</h3>
+        <p className="font-semibold text-gray-900">State Normalization</p>
+        <p className="mt-1">
+          The 24 base-out states (8 base configurations × 3 out counts) each have different average run values.
+          A hit with runners in scoring position carries higher raw delta_run_exp than with bases empty —
+          but it's also the <em>expected</em> outcome in that situation. We subtract the mean delta_run_exp
+          for each state so ELO only rewards performance <em>above</em> the situational average.
+        </p>
+        <p className="font-semibold text-gray-900 mt-4">Park Factor</p>
+        <p className="mt-1">MLB's 30 stadiums have different scoring environments:</p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Stadium</th>
+                <th className="px-3 py-2 text-left font-semibold">Park Factor</th>
+                <th className="px-3 py-2 text-left font-semibold">Effect</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2">Coors Field (COL)</td>
+                <td className="px-3 py-2">1.13</td>
+                <td className="px-3 py-2">Batter-friendly — positive outcomes adjusted down</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">T-Mobile Park (SEA)</td>
+                <td className="px-3 py-2">0.91</td>
+                <td className="px-3 py-2">Pitcher-friendly — positive outcomes adjusted up</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Yankee Stadium (NYY)</td>
+                <td className="px-3 py-2">1.00</td>
+                <td className="px-3 py-2">Neutral — no adjustment</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-sm text-gray-500">
+          Over a season of ~250 home PAs, park factor shifts ELO by ±40 points for extreme parks.
+        </p>
+      </section>
+
+      {/* ELO Tiers */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">ELO Tiers</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Tier</th>
+                <th className="px-3 py-2 text-left font-semibold">ELO Range</th>
+                <th className="px-3 py-2 text-left font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-elite">Elite</td>
+                <td className="px-3 py-2">1,800+</td>
+                <td className="px-3 py-2">MVP-caliber performance</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-high">High</td>
+                <td className="px-3 py-2">1,650 – 1,799</td>
+                <td className="px-3 py-2">All-Star level</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-above">Above Avg</td>
+                <td className="px-3 py-2">1,550 – 1,649</td>
+                <td className="px-3 py-2">Above-average starter</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-average">Average</td>
+                <td className="px-3 py-2">1,450 – 1,549</td>
+                <td className="px-3 py-2">League average</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-below">Below Avg</td>
+                <td className="px-3 py-2">1,350 – 1,449</td>
+                <td className="px-3 py-2">Below-average performance</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-low">Low</td>
+                <td className="px-3 py-2">1,200 – 1,349</td>
+                <td className="px-3 py-2">Struggling performance</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-bold text-elo-cold">Cold</td>
+                <td className="px-3 py-2">&lt; 1,200</td>
+                <td className="px-3 py-2">Significant slump</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Architecture */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">System Architecture</h3>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm overflow-x-auto">
+          <p>[Statcast Parquet] → ETL → [Supabase plate_appearances] → ELO Engine → [player_elo / daily_ohlc]</p>
+          <p className="ml-56 text-gray-500">↑ RE24 Baseline + Park Factors</p>
+        </div>
+        <ol className="list-decimal pl-5 space-y-1 mt-3">
+          <li><strong>Raw Data</strong> — Statcast pitch-level parquet (711K rows, 118 columns)</li>
+          <li><strong>ETL</strong> — Aggregate to plate appearance level, extract delta_run_exp, base-out state, venue</li>
+          <li><strong>ELO Engine (V5.3)</strong> — Process PAs chronologically with park factor + state normalization</li>
+          <li><strong>Output</strong> — Per-PA ELO detail records + daily OHLC candlestick aggregation</li>
+          <li><strong>Frontend</strong> — React SPA reading directly from Supabase</li>
+        </ol>
+      </section>
+
+      {/* Database */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Database</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Table</th>
+                <th className="px-3 py-2 text-left font-semibold">Rows</th>
+                <th className="px-3 py-2 text-left font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-mono">players</td>
+                <td className="px-3 py-2">1,469</td>
+                <td className="px-3 py-2">Player metadata (name, team, position)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">plate_appearances</td>
+                <td className="px-3 py-2">183,092</td>
+                <td className="px-3 py-2">All PAs with delta_run_exp and context</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">player_elo</td>
+                <td className="px-3 py-2">1,469</td>
+                <td className="px-3 py-2">Current ELO + PA count per player</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">elo_pa_detail</td>
+                <td className="px-3 py-2">183,092</td>
+                <td className="px-3 py-2">Per-PA ELO change records</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">daily_ohlc</td>
+                <td className="px-3 py-2">69,125</td>
+                <td className="px-3 py-2">Daily OHLC candlestick data</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Tech Stack */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Tech Stack</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <p className="font-semibold text-gray-900 mb-2">Engine (Python)</p>
+            <ul className="list-disc pl-5 space-y-1 text-sm">
+              <li>pandas — data processing</li>
+              <li>Supabase Python SDK — database I/O</li>
+              <li>pytest — test suite (72 tests)</li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-900 mb-2">Frontend (TypeScript)</p>
+            <ul className="list-disc pl-5 space-y-1 text-sm">
+              <li>Vite + React + TypeScript</li>
+              <li>Tailwind CSS</li>
+              <li>TanStack React Query</li>
+              <li>Lightweight Charts (OHLC)</li>
+              <li>Supabase JS SDK (read-only)</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Disclaimer */}
+      <section className="text-sm text-gray-500 border-t border-gray-200 pt-4">
+        <p>
+          This project is for demonstration and analytical purposes. ELO ratings represent one approach
+          to player evaluation and do not capture defense, baserunning, or game context beyond run expectancy.
+          Data sourced from MLB Statcast via Baseball Savant.
+        </p>
+      </section>
     </div>
   );
 }
@@ -403,7 +720,7 @@ function DeveloperTab() {
 }
 
 export default function Guide() {
-  const [activeTab, setActiveTab] = useState<Tab>('general');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   return (
     <div className="space-y-6">
@@ -417,6 +734,17 @@ export default function Guide() {
 
       {/* Tab Selector */}
       <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
+            activeTab === 'overview'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Info className="w-4 h-4" />
+          Project Overview
+        </button>
         <button
           onClick={() => setActiveTab('general')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
@@ -443,7 +771,7 @@ export default function Guide() {
 
       {/* Tab Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        {activeTab === 'general' ? <GeneralTab /> : <DeveloperTab />}
+        {activeTab === 'overview' ? <OverviewTab /> : activeTab === 'general' ? <GeneralTab /> : <DeveloperTab />}
       </div>
     </div>
   );
