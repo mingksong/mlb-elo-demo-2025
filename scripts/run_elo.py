@@ -76,6 +76,9 @@ def prepare_pa_detail_records(pa_details: list[dict]) -> list[dict]:
             'pitcher_elo_after': round(d['pitcher_elo_after'], 4),
             'on_base_delta': round(d['elo_delta'], 4),
             'power_delta': 0.0,
+            'k_base': round(d.get('k_base', 0.0), 4),
+            'physics_mod': round(d.get('physics_mod', 1.0), 4),
+            'k_effective': round(d.get('k_effective', 0.0), 4),
         })
     return records
 
