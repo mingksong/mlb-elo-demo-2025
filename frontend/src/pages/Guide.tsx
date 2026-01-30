@@ -534,6 +534,108 @@ function GeneralTab() {
         </p>
       </Accordion>
 
+      <Accordion title="Why Pitchers Have Lower Ratings Than Batters">
+        <p>
+          You may notice that top batters reach ELO ratings above 2,500, while even the
+          best pitchers rarely exceed 1,650. This is <strong>not an engine flaw</strong> — it
+          is a structural consequence of the zero-sum system combined with the player pool sizes
+          in MLB.
+        </p>
+        <p className="font-semibold text-gray-900 mt-3">The Math</p>
+        <p className="mt-1">
+          In a zero-sum system, the total ELO gained by all batters equals the total ELO
+          lost by all pitchers:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 mt-2">
+          <p>&Sigma; (batting_elo &minus; 1500) + &Sigma; (pitching_elo &minus; 1500) = 0</p>
+        </div>
+        <p className="mt-2">
+          Verified from 2025 season data:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 mt-2">
+          <p>Batter pool:  673 players &times; (+107.3 avg) = <strong>+72,232</strong> total ELO gained</p>
+          <p>Pitcher pool: 873 players &times; (&minus;82.7 avg) = <strong>&minus;72,232</strong> total ELO lost</p>
+          <p className="text-gray-500 mt-1">Net = 0.0 (zero-sum verified)</p>
+        </div>
+        <p className="mt-3">
+          The same total ELO transfer (+72,232 points) is shared among a <strong>different
+          number of players</strong> on each side:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 mt-2">
+          <p>Avg batter gain  = +72,232 / 673 = <strong>+107.3</strong> per batter</p>
+          <p>Avg pitcher loss = &minus;72,232 / 873 = <strong>&minus;82.7</strong> per pitcher</p>
+        </div>
+        <p className="mt-3">
+          Because there are <strong>30% more pitchers than batters</strong>, each pitcher absorbs
+          a smaller share of the loss, while each batter gets a larger share of the gain. This
+          pushes the batter distribution upward and compresses the pitcher distribution downward.
+        </p>
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Pool</th>
+                <th className="px-3 py-2 text-left font-semibold">Players</th>
+                <th className="px-3 py-2 text-left font-semibold">Mean ELO</th>
+                <th className="px-3 py-2 text-left font-semibold">Min</th>
+                <th className="px-3 py-2 text-left font-semibold">Max</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-semibold">Batters</td>
+                <td className="px-3 py-2">673</td>
+                <td className="px-3 py-2">1,607</td>
+                <td className="px-3 py-2">1,324</td>
+                <td className="px-3 py-2">2,689</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Pitchers</td>
+                <td className="px-3 py-2">873</td>
+                <td className="px-3 py-2">1,417</td>
+                <td className="px-3 py-2">876</td>
+                <td className="px-3 py-2">1,650</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="font-semibold text-gray-900 mt-4">Why More Pitchers?</p>
+        <p className="mt-1">
+          MLB rosters carry 13 pitchers (5 starters + 8 relievers) versus 13 position players,
+          but the total number of <strong>unique pitchers used across a season</strong> far exceeds
+          unique batters. This is driven by:
+        </p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li>
+            <strong>Frequent minor league shuttling</strong> — Pitchers are optioned to and
+            recalled from the minors far more frequently than position players. A reliever
+            might appear for a few innings, get optioned, and be replaced by another arm.
+          </li>
+          <li>
+            <strong>Bullpen specialization</strong> — Modern bullpen usage creates demand for
+            many short-stint relievers, each contributing a small number of batters faced.
+          </li>
+          <li>
+            <strong>Injury replacement</strong> — Pitcher injuries lead to frequent roster
+            churn that doesn't equally affect position players.
+          </li>
+        </ul>
+        <p className="mt-3">
+          These short-stint pitchers typically exit the data near ELO 1,500 with a small negative
+          offset, contributing to the lower pitcher pool average. Meanwhile, position players hold
+          roster spots more stably, accumulating PAs that let skill differentiation compound in
+          the ELO.
+        </p>
+        <p className="font-semibold text-gray-900 mt-4">Key Takeaway</p>
+        <p className="mt-1">
+          When comparing players across roles, <strong>use role-relative rankings</strong> (percentile
+          within batters or within pitchers) rather than raw ELO values. A pitcher at 1,620 ELO is
+          elite within the pitching pool, even though that number would be merely above-average
+          for a batter. The ELO tier badges on this site reflect absolute thresholds, but the
+          leaderboard rankings are always within-role.
+        </p>
+      </Accordion>
+
       <Accordion title="Two-Way Players">
         <p>
           Players who both bat and pitch (e.g., Shohei Ohtani) have <strong>two independent ELO
