@@ -4,7 +4,7 @@ import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-rea
 import { useTalentLeaderboard } from '../hooks/useTalent';
 import { useSeasonMeta } from '../hooks/useElo';
 import TalentLeaderboardTable from '../components/talent/TalentLeaderboardTable';
-import { ALL_TALENTS } from '../types/talent';
+import { ALL_TALENTS, BATTER_TALENTS, PITCHER_TALENTS } from '../types/talent';
 import type { TalentMeta } from '../types/talent';
 
 const ESTIMATED_TOTAL: Record<string, number> = {
@@ -61,16 +61,15 @@ export default function TalentLeaderboard() {
       </div>
 
       {/* Dimension Tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-2">
-        {ALL_TALENTS.map((talent, index) => (
-          <div key={talent.type} className="flex items-center">
-            {/* Separator between batter and pitcher groups */}
-            {index === 5 && (
-              <div className="w-px h-6 bg-gray-300 mx-2 flex-shrink-0" />
-            )}
+      <div className="flex flex-wrap items-start gap-4">
+        {/* Batting group */}
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Batting</span>
+          {BATTER_TALENTS.map((talent) => (
             <button
+              key={talent.type}
               onClick={() => setActiveTab(talent)}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
                 activeTab.type === talent.type
                   ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -78,8 +77,25 @@ export default function TalentLeaderboard() {
             >
               {talent.label}
             </button>
-          </div>
-        ))}
+          ))}
+        </div>
+        {/* Pitching group */}
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider mr-1">Pitching</span>
+          {PITCHER_TALENTS.map((talent) => (
+            <button
+              key={talent.type}
+              onClick={() => setActiveTab(talent)}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab.type === talent.type
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {talent.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Role indicator */}

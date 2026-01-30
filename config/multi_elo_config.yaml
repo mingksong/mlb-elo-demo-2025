@@ -111,21 +111,21 @@ event_weights:
     contact: 0.3       # V1: 1.0 → V2: 0.3 (BIP 약한 반영)
     power: 0.0
     discipline: 0.0
-    speed: 0.3
+    speed: 0.0         # V2.1: speed 비활성화
     clutch_base: 0.5
 
   Double:
     contact: 0.3       # V1: 0.7 → V2: 0.3
     power: 0.7
     discipline: 0.0
-    speed: 0.2
+    speed: 0.0         # V2.1: speed 비활성화
     clutch_base: 0.6
 
   Triple:
     contact: 0.3
     power: 0.3
     discipline: 0.0
-    speed: 0.8
+    speed: 0.0         # V2.1: speed 비활성화 (was 0.8)
     clutch_base: 0.7
 
   HR:
@@ -288,11 +288,11 @@ pitcher_event_weights:
 # -----------------------------------------------------------------------------
 baserunning_weights:
   SB:
-    speed: 1.0
+    speed: 0.0         # V2.1: speed 비활성화 (was 1.0)
     clutch_base: 0.3
 
   CS:
-    speed: -3.0
+    speed: 0.0         # V2.1: speed 비활성화 (was -3.0)
     clutch_base: -0.7
 
 # -----------------------------------------------------------------------------
@@ -301,11 +301,11 @@ baserunning_weights:
 composite_weights:
   batter:
     default:
-      contact: 0.20
-      power: 0.20
-      discipline: 0.20
-      speed: 0.20
-      clutch: 0.20
+      contact: 0.25     # V2.1: speed 제외로 재분배
+      power: 0.25
+      discipline: 0.25
+      speed: 0.00       # V2.1: speed 비활성화
+      clutch: 0.25
 
   pitcher:
     starter:
