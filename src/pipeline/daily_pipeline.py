@@ -11,11 +11,13 @@ Flow:
     6. 기존 ELO 상태 로드
     7. EloBatch(initial_states=...) → 증분 계산
     8. 결과 업로드: player_elo (active_only), elo_pa_detail, daily_ohlc
+    9. Talent ELO: 9D 증분 계산 + 업로드
 """
 
 import logging
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 from src.engine.elo_batch import EloBatch
@@ -23,6 +25,13 @@ from src.engine.elo_calculator import PlayerEloState
 from src.engine.elo_config import INITIAL_ELO
 from src.engine.re24_baseline import RE24Baseline
 from src.engine.park_factor import ParkFactor
+from src.engine.talent_batch import TalentBatch
+from src.engine.talent_state_manager import DualBatterState, DualPitcherState
+from src.engine.multi_elo_types import (
+    BatterTalentState, PitcherTalentState, DEFAULT_ELO,
+    BATTER_DIM_NAMES, BATTER_DIM_COUNT,
+    PITCHER_DIM_NAMES, PITCHER_DIM_COUNT,
+)
 from src.etl.fetch_statcast import fetch_statcast_date
 from src.etl.statcast_to_pa import convert_statcast_to_pa
 from src.etl.player_registry import detect_new_player_ids_batch, register_new_players
@@ -72,6 +81,100 @@ def load_current_elo_states(client) -> dict[int, PlayerEloState]:
     return states
 
 
+def load_current_talent_states(client) -> tuple[dict[int, DualBatterState], dict[int, DualPitcherState]]:
+    """Supabase talent_player_current → DualBatterState/DualPitcherState dicts."""
+    logger.info("Loading current talent ELO states from Supabase...")
+    all_rows = []
+    page_size = 1000
+    offset = 0
+
+    while True:
+        response = (
+            client.table('talent_player_current')
+            .select('player_id, player_role, talent_type, season_elo, career_elo, event_count, pa_count')
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
+        rows = response.data
+        if not rows:
+            break
+        all_rows.extend(rows)
+        offset += page_size
+        if len(rows) < page_size:
+            break
+
+    batters: dict[int, DualBatterState] = {}
+    pitchers: dict[int, DualPitcherState] = {}
+
+    for row in all_rows:
+        pid = row['player_id']
+        role = row['player_role']
+        talent_type = row['talent_type']
+        season_elo = row.get('season_elo', DEFAULT_ELO) or DEFAULT_ELO
+        career_elo = row.get('career_elo', DEFAULT_ELO) or DEFAULT_ELO
+        event_count = row.get('event_count', 0) or 0
+        pa_count = row.get('pa_count', 0) or 0
+
+        if role == 'batter' and talent_type in BATTER_DIM_NAMES:
+            if pid not in batters:
+                batters[pid] = DualBatterState(player_id=pid)
+            idx = BATTER_DIM_NAMES.index(talent_type)
+            batters[pid].season.elo_dimensions[idx] = season_elo
+            batters[pid].career.elo_dimensions[idx] = career_elo
+            batters[pid].season.event_counts[idx] = event_count
+            batters[pid].career.event_counts[idx] = event_count
+            batters[pid].season.pa_count = pa_count
+            batters[pid].career.pa_count = pa_count
+
+        elif role == 'pitcher' and talent_type in PITCHER_DIM_NAMES:
+            if pid not in pitchers:
+                pitchers[pid] = DualPitcherState(player_id=pid)
+            idx = PITCHER_DIM_NAMES.index(talent_type)
+            pitchers[pid].season.elo_dimensions[idx] = season_elo
+            pitchers[pid].career.elo_dimensions[idx] = career_elo
+            pitchers[pid].season.event_counts[idx] = event_count
+            pitchers[pid].career.event_counts[idx] = event_count
+            pitchers[pid].season.bfp_count = pa_count
+            pitchers[pid].career.bfp_count = pa_count
+
+    logger.info(f"  Loaded {len(batters):,} talent batter states, {len(pitchers):,} talent pitcher states")
+    return batters, pitchers
+
+
+def _prepare_talent_pa_detail_records(details: list[dict]) -> list[dict]:
+    """talent_pa_detail records for upload."""
+    records = []
+    for d in details:
+        records.append({
+            'pa_id': int(d['pa_id']),
+            'player_id': int(d['player_id']),
+            'player_role': d['player_role'],
+            'talent_type': d['talent_type'],
+            'elo_before': round(float(d['elo_before']), 4),
+            'elo_after': round(float(d['elo_after']), 4),
+            'delta': round(float(d['delta']), 4),
+        })
+    return records
+
+
+def _prepare_talent_ohlc_records(ohlc_list: list[dict]) -> list[dict]:
+    """talent_daily_ohlc records for upload."""
+    records = []
+    for ohlc in ohlc_list:
+        records.append({
+            'player_id': int(ohlc['player_id']),
+            'game_date': ohlc['game_date'],
+            'talent_type': ohlc['talent_type'],
+            'elo_type': ohlc.get('elo_type', 'SEASON'),
+            'open': round(float(ohlc['open']), 4),
+            'high': round(float(ohlc['high']), 4),
+            'low': round(float(ohlc['low']), 4),
+            'close': round(float(ohlc['close']), 4),
+            'total_pa': int(ohlc.get('total_pa', 0)),
+        })
+    return records
+
+
 def delete_date_data(client, target_date: date):
     """날짜별 기존 데이터 삭제 (idempotent 재처리용).
 
@@ -108,9 +211,19 @@ def delete_date_data(client, target_date: date):
             client.table('elo_pa_detail').delete().in_('pa_id', batch).execute()
         logger.info(f"  Deleted {len(pa_ids)} elo_pa_detail records")
 
+        # 2b. talent_pa_detail 삭제 (pa_id 기준)
+        for i in range(0, len(pa_ids), batch_size):
+            batch = pa_ids[i:i + batch_size]
+            client.table('talent_pa_detail').delete().in_('pa_id', batch).execute()
+        logger.info(f"  Deleted {len(pa_ids)} talent_pa_detail records")
+
     # 3. daily_ohlc 삭제 (game_date 기준)
     client.table('daily_ohlc').delete().eq('game_date', date_str).execute()
     logger.info(f"  Deleted daily_ohlc for {date_str}")
+
+    # 3b. talent_daily_ohlc 삭제 (game_date 기준)
+    client.table('talent_daily_ohlc').delete().eq('game_date', date_str).execute()
+    logger.info(f"  Deleted talent_daily_ohlc for {date_str}")
 
     # 4. plate_appearances 삭제
     client.table('plate_appearances').delete().eq('game_date', date_str).execute()
@@ -247,6 +360,27 @@ def run_daily_pipeline(target_date: date = None, force: bool = False) -> dict:
     ohlc_records = _prepare_ohlc_records(batch.daily_ohlc)
     ohlc_uploaded = upload_table(client, 'daily_ohlc', ohlc_records)
 
+    # 9. Talent ELO (incremental 9D)
+    logger.info("  Running incremental Talent ELO calculation...")
+    initial_batters, initial_pitchers = load_current_talent_states(client)
+    talent_batch = TalentBatch(initial_batters=initial_batters, initial_pitchers=initial_pitchers)
+    talent_batch.process(pa_df)
+
+    # 9a. talent_player_current (active_only=True)
+    logger.info("  Uploading talent_player_current (active only)...")
+    talent_player_records = talent_batch.get_talent_player_records(active_only=True)
+    talent_player_uploaded = upload_table(client, 'talent_player_current', talent_player_records)
+
+    # 9b. talent_pa_detail
+    logger.info("  Uploading talent_pa_detail...")
+    talent_detail_records = _prepare_talent_pa_detail_records(talent_batch.talent_pa_details)
+    talent_detail_uploaded = upload_table(client, 'talent_pa_detail', talent_detail_records)
+
+    # 9c. talent_daily_ohlc
+    logger.info("  Uploading talent_daily_ohlc...")
+    talent_ohlc_records = _prepare_talent_ohlc_records(talent_batch.talent_daily_ohlc)
+    talent_ohlc_uploaded = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records)
+
     result = {
         'status': 'success',
         'date': date_str,
@@ -258,6 +392,9 @@ def run_daily_pipeline(target_date: date = None, force: bool = False) -> dict:
         'elo_uploaded': elo_uploaded,
         'detail_uploaded': detail_uploaded,
         'ohlc_uploaded': ohlc_uploaded,
+        'talent_player_uploaded': talent_player_uploaded,
+        'talent_detail_uploaded': talent_detail_uploaded,
+        'talent_ohlc_uploaded': talent_ohlc_uploaded,
     }
     logger.info(f"  === Done: {result} ===")
     return result

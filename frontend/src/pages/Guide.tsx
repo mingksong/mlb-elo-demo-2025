@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { BookOpen, Code, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Code, Info, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useSeasonMeta } from '../hooks/useElo';
 
-type Tab = 'overview' | 'general' | 'developer';
+type Tab = 'overview' | 'general' | 'talent' | 'developer';
 
 function Accordion({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -601,6 +601,168 @@ function GeneralTab() {
   );
 }
 
+function TalentTab() {
+  return (
+    <div className="space-y-4">
+      <Accordion title="What is Talent ELO?" defaultOpen>
+        <p>
+          While the main ELO rating captures a player's <strong>overall</strong> performance,
+          Talent ELO decomposes that into <strong>specific skill dimensions</strong>. Each
+          dimension is tracked independently using a binary matchup model — batter vs. pitcher
+          in each skill category.
+        </p>
+        <p>
+          <strong>Batter dimensions (4):</strong> Contact, Power, Discipline, Clutch
+        </p>
+        <p>
+          <strong>Pitcher dimensions (4):</strong> Stuff, BIP Suppression, Command, Clutch
+        </p>
+        <p>
+          There is no composite talent score — each dimension stands on its own. A player
+          might be Elite in Power but Average in Contact, giving you a much richer picture
+          of their skill profile.
+        </p>
+      </Accordion>
+
+      <Accordion title="Batting Dimensions">
+        <p>Each batting dimension tracks a specific offensive skill:</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Dimension</th>
+                <th className="px-3 py-2 text-left font-semibold">What it measures</th>
+                <th className="px-3 py-2 text-left font-semibold">Key events (+)</th>
+                <th className="px-3 py-2 text-left font-semibold">Key events (-)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-semibold">Contact</td>
+                <td className="px-3 py-2">Ability to avoid strikeouts and make contact</td>
+                <td className="px-3 py-2">Single, Double, Triple</td>
+                <td className="px-3 py-2">Strikeout, Out</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Power</td>
+                <td className="px-3 py-2">Extra-base hit and home run ability</td>
+                <td className="px-3 py-2">HR (1.0), Double (0.7)</td>
+                <td className="px-3 py-2">GIDP (-0.7), Out (-0.2)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Discipline</td>
+                <td className="px-3 py-2">Plate discipline and walk rate</td>
+                <td className="px-3 py-2">BB (1.0), HBP (0.8)</td>
+                <td className="px-3 py-2">&mdash;</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Clutch</td>
+                <td className="px-3 py-2">Performance in high-leverage situations (RISP)</td>
+                <td className="px-3 py-2">Hits with runners on 2B/3B</td>
+                <td className="px-3 py-2">Outs/K with runners on 2B/3B</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Accordion>
+
+      <Accordion title="Pitching Dimensions">
+        <p>Each pitching dimension tracks a specific mound skill:</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Dimension</th>
+                <th className="px-3 py-2 text-left font-semibold">What it measures</th>
+                <th className="px-3 py-2 text-left font-semibold">Key events (+)</th>
+                <th className="px-3 py-2 text-left font-semibold">Key events (-)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-semibold">Stuff</td>
+                <td className="px-3 py-2">Strikeout-inducing ability (FIP-based)</td>
+                <td className="px-3 py-2">Strikeout (1.0)</td>
+                <td className="px-3 py-2">HR (-0.8)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">BIP Supp.</td>
+                <td className="px-3 py-2">Batted-ball suppression (BABIP)</td>
+                <td className="px-3 py-2">Out (0.4), GIDP (0.5)</td>
+                <td className="px-3 py-2">Single (-0.6), Double (-0.8), Triple (-0.9)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Command</td>
+                <td className="px-3 py-2">Walk prevention and control</td>
+                <td className="px-3 py-2">Strikeout (0.3), Out (0.15)</td>
+                <td className="px-3 py-2">BB (-1.0), HBP (-0.8)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Clutch</td>
+                <td className="px-3 py-2">Clutch pitching with runners on base</td>
+                <td className="px-3 py-2">Same events, amplified in RISP</td>
+                <td className="px-3 py-2">Same events, amplified in RISP</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Accordion>
+
+      <Accordion title="How Talent ELO is Calculated">
+        <p>
+          Talent ELO uses a <strong>binary matchup model</strong>: each plate appearance pits
+          the batter's skill dimension against the pitcher's corresponding dimension
+          (e.g., Contact vs. Stuff).
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            Each PA outcome triggers updates to the relevant dimensions based on the result type
+            (e.g., a home run updates Power for the batter and Stuff for the pitcher).
+          </li>
+          <li>
+            The ELO expected score uses the difference between the batter's and pitcher's
+            dimension ratings to determine the expected outcome.
+          </li>
+          <li>
+            <strong>Reliability</strong> scales from 0.3 to 1.0 as a player accumulates
+            qualifying events in each dimension. New players start with dampened updates that
+            become full-strength as the sample grows.
+          </li>
+          <li>
+            Each dimension is updated independently — there is no composite talent score.
+            A player's skill profile is the full set of dimension ratings.
+          </li>
+        </ul>
+      </Accordion>
+
+      <Accordion title="Important Notes">
+        <ul className="list-disc pl-5 space-y-2">
+          <li>
+            Talent ELO uses the <strong>same tier system</strong> as the main ELO
+            (Elite 1,800+, High 1,650+, etc.).
+          </li>
+          <li>
+            Dimensions are <strong>independent</strong> — a player can be Elite in Power but
+            Average in Contact. This is by design.
+          </li>
+          <li>
+            Batter Clutch and Pitcher Clutch are <strong>separate ratings</strong> using
+            RISP (Runners in Scoring Position) as a proxy for high-leverage situations.
+          </li>
+          <li>
+            BIP Suppression has intentionally <strong>low sensitivity</strong> to suppress
+            BABIP noise, consistent with DIPS (Defense Independent Pitching Statistics) theory.
+          </li>
+          <li>
+            Speed dimension is currently <strong>disabled</strong> due to insufficient
+            Statcast stolen base data for reliable ELO convergence.
+          </li>
+        </ul>
+      </Accordion>
+    </div>
+  );
+}
+
 function DeveloperTab() {
   return (
     <div className="space-y-4">
@@ -866,6 +1028,17 @@ export default function Guide() {
           General
         </button>
         <button
+          onClick={() => setActiveTab('talent')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
+            activeTab === 'talent'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          Talent ELO
+        </button>
+        <button
           onClick={() => setActiveTab('developer')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
             activeTab === 'developer'
@@ -880,7 +1053,7 @@ export default function Guide() {
 
       {/* Tab Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        {activeTab === 'overview' ? <OverviewTab /> : activeTab === 'general' ? <GeneralTab /> : <DeveloperTab />}
+        {activeTab === 'overview' ? <OverviewTab /> : activeTab === 'general' ? <GeneralTab /> : activeTab === 'talent' ? <TalentTab /> : <DeveloperTab />}
       </div>
     </div>
   );

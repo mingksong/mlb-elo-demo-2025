@@ -21,7 +21,7 @@ from src.engine.multi_elo_types import (
     PITCHER_DIM_NAMES,
     DEFAULT_ELO,
 )
-from src.engine.talent_state_manager import TalentStateManager
+from src.engine.talent_state_manager import TalentStateManager, DualBatterState, DualPitcherState
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +29,22 @@ logger = logging.getLogger(__name__)
 class TalentBatch:
     """9D Talent ELO batch processor."""
 
-    def __init__(self, config: MultiEloConfig | None = None):
+    def __init__(
+        self,
+        config: MultiEloConfig | None = None,
+        initial_batters: dict[int, DualBatterState] | None = None,
+        initial_pitchers: dict[int, DualPitcherState] | None = None,
+    ):
         self.config = config or MultiEloConfig()
         self.engine = MultiEloEngine(config=self.config)
-        self.state_mgr = TalentStateManager()
+        self.state_mgr = TalentStateManager(
+            initial_batters=initial_batters,
+            initial_pitchers=initial_pitchers,
+        )
 
         self.talent_pa_details: list[dict] = []
         self.talent_daily_ohlc: list[dict] = []
+        self._active_player_ids: set[int] = set()
 
         # OHLC tracking: key = (player_id, talent_type)
         self._current_date: Optional[str] = None
@@ -108,6 +117,9 @@ class TalentBatch:
             batter_id = int(row['batter_id'])
             pitcher_id = int(row['pitcher_id'])
             result_type = row.get('result_type', 'OUT')
+
+            self._active_player_ids.add(batter_id)
+            self._active_player_ids.add(pitcher_id)
 
             batter_dual = self.state_mgr.get_or_create_batter(batter_id)
             pitcher_dual = self.state_mgr.get_or_create_pitcher(pitcher_id)
@@ -192,10 +204,12 @@ class TalentBatch:
             f"{len(self.talent_daily_ohlc):,} OHLC records"
         )
 
-    def get_talent_player_records(self) -> list[dict]:
+    def get_talent_player_records(self, active_only: bool = False) -> list[dict]:
         """Generate talent_player_current table records."""
         records = []
         for pid, dual in self.state_mgr.all_batters.items():
+            if active_only and pid not in self._active_player_ids:
+                continue
             for b_idx, dim_name in enumerate(BATTER_DIM_NAMES):
                 records.append({
                     'player_id': pid,
@@ -207,6 +221,8 @@ class TalentBatch:
                     'pa_count': dual.season.pa_count,
                 })
         for pid, dual in self.state_mgr.all_pitchers.items():
+            if active_only and pid not in self._active_player_ids:
+                continue
             for p_idx, dim_name in enumerate(PITCHER_DIM_NAMES):
                 records.append({
                     'player_id': pid,

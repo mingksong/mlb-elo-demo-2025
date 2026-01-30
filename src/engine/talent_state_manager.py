@@ -56,9 +56,13 @@ class DualPitcherState:
 class TalentStateManager:
     """Manages all batter and pitcher talent states."""
 
-    def __init__(self):
-        self._batters: dict[int, DualBatterState] = {}
-        self._pitchers: dict[int, DualPitcherState] = {}
+    def __init__(
+        self,
+        initial_batters: dict[int, DualBatterState] | None = None,
+        initial_pitchers: dict[int, DualPitcherState] | None = None,
+    ):
+        self._batters: dict[int, DualBatterState] = dict(initial_batters) if initial_batters else {}
+        self._pitchers: dict[int, DualPitcherState] = dict(initial_pitchers) if initial_pitchers else {}
         self._current_season: Optional[int] = None
 
     def get_or_create_batter(self, player_id: int) -> DualBatterState:
