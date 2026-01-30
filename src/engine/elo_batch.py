@@ -38,6 +38,7 @@ class DailyOhlc:
     close_elo: float
     games_played: int = 1
     total_pa: int = 0
+    role: str = 'BATTING'  # 'BATTING' or 'PITCHING'
 
     @property
     def delta(self) -> float:
@@ -63,49 +64,53 @@ class EloBatch:
         self.daily_ohlc: list[DailyOhlc] = []
         self._active_player_ids: set[int] = set()
 
-        # OHLC 추적용 내부 상태
+        # OHLC 추적용 내부 상태 — 키: (player_id, role)
         self._current_date: Optional[str] = None
-        self._day_open: dict[int, float] = {}   # player_id → open ELO
-        self._day_high: dict[int, float] = {}
-        self._day_low: dict[int, float] = {}
-        self._day_pa: dict[int, int] = {}
+        self._day_open: dict[tuple[int, str], float] = {}
+        self._day_high: dict[tuple[int, str], float] = {}
+        self._day_low: dict[tuple[int, str], float] = {}
+        self._day_pa: dict[tuple[int, str], int] = {}
 
     def _get_player(self, player_id: int) -> PlayerEloState:
         if player_id not in self.players:
             self.players[player_id] = PlayerEloState(player_id=player_id)
         return self.players[player_id]
 
-    def _record_ohlc_open(self, player_id: int, elo: float):
-        """하루의 첫 ELO를 Open으로 기록."""
-        if player_id not in self._day_open:
-            self._day_open[player_id] = elo
-            self._day_high[player_id] = elo
-            self._day_low[player_id] = elo
-            self._day_pa[player_id] = 0
+    def _record_ohlc_open(self, player_id: int, role: str, elo: float):
+        """하루의 첫 ELO를 Open으로 기록 (role별)."""
+        key = (player_id, role)
+        if key not in self._day_open:
+            self._day_open[key] = elo
+            self._day_high[key] = elo
+            self._day_low[key] = elo
+            self._day_pa[key] = 0
 
-    def _update_ohlc(self, player_id: int, elo: float):
-        """타석 후 High/Low/Close 업데이트."""
-        if player_id in self._day_high:
-            self._day_high[player_id] = max(self._day_high[player_id], elo)
-        if player_id in self._day_low:
-            self._day_low[player_id] = min(self._day_low[player_id], elo)
-        if player_id in self._day_pa:
-            self._day_pa[player_id] += 1
+    def _update_ohlc(self, player_id: int, role: str, elo: float):
+        """타석 후 High/Low/Close 업데이트 (role별)."""
+        key = (player_id, role)
+        if key in self._day_high:
+            self._day_high[key] = max(self._day_high[key], elo)
+        if key in self._day_low:
+            self._day_low[key] = min(self._day_low[key], elo)
+        if key in self._day_pa:
+            self._day_pa[key] += 1
 
     def _finalize_day(self, game_date_str: str):
-        """하루 종료 시 OHLC 레코드 생성."""
-        game_date = date.fromisoformat(game_date_str)
-        for player_id in self._day_open:
+        """하루 종료 시 OHLC 레코드 생성 (role별)."""
+        game_date_val = date.fromisoformat(game_date_str)
+        for (player_id, role) in self._day_open:
             player = self._get_player(player_id)
+            close_elo = player.batting_elo if role == 'BATTING' else player.pitching_elo
             self.daily_ohlc.append(DailyOhlc(
                 player_id=player_id,
-                game_date=game_date,
+                game_date=game_date_val,
                 elo_type='SEASON',
-                open_elo=self._day_open[player_id],
-                high_elo=self._day_high[player_id],
-                low_elo=self._day_low[player_id],
-                close_elo=player.elo,
-                total_pa=self._day_pa.get(player_id, 0),
+                open_elo=self._day_open[(player_id, role)],
+                high_elo=self._day_high[(player_id, role)],
+                low_elo=self._day_low[(player_id, role)],
+                close_elo=close_elo,
+                total_pa=self._day_pa.get((player_id, role), 0),
+                role=role,
             ))
         self._day_open.clear()
         self._day_high.clear()
@@ -136,9 +141,9 @@ class EloBatch:
             batter = self._get_player(batter_id)
             pitcher = self._get_player(pitcher_id)
 
-            # OHLC open 기록 (타석 전)
-            self._record_ohlc_open(batter_id, batter.elo)
-            self._record_ohlc_open(pitcher_id, pitcher.elo)
+            # OHLC open 기록 (타석 전, role별)
+            self._record_ohlc_open(batter_id, 'BATTING', batter.batting_elo)
+            self._record_ohlc_open(pitcher_id, 'PITCHING', pitcher.pitching_elo)
 
             # delta_run_exp (NaN → None)
             rv = row.get('delta_run_exp')
@@ -162,9 +167,9 @@ class EloBatch:
                 result_type=result_type,
             )
 
-            # OHLC update (타석 후)
-            self._update_ohlc(batter_id, batter.elo)
-            self._update_ohlc(pitcher_id, pitcher.elo)
+            # OHLC update (타석 후, role별)
+            self._update_ohlc(batter_id, 'BATTING', batter.batting_elo)
+            self._update_ohlc(pitcher_id, 'PITCHING', pitcher.pitching_elo)
 
             # PA detail 기록
             self.pa_details.append({
@@ -216,7 +221,11 @@ class EloBatch:
                 'on_base_elo': state.elo,
                 'power_elo': state.elo,
                 'composite_elo': state.elo,
+                'batting_elo': state.batting_elo,
+                'pitching_elo': state.pitching_elo,
                 'pa_count': state.pa_count,
+                'batting_pa': state.batting_pa,
+                'pitching_pa': state.pitching_pa,
                 'last_game_date': last_date,
             })
         return records

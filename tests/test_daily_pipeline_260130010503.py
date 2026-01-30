@@ -52,8 +52,8 @@ class TestBatchWithInitialStates:
     def test_initial_states_preloaded(self):
         """initial_states로 ELO 1600 세팅 후 PA 처리 → 1600 기준 시작."""
         states = {
-            100: PlayerEloState(player_id=100, elo=1600.0, pa_count=50),
-            200: PlayerEloState(player_id=200, elo=1400.0, pa_count=80),
+            100: PlayerEloState(player_id=100, batting_elo=1600.0, batting_pa=50),
+            200: PlayerEloState(player_id=200, pitching_elo=1400.0, pitching_pa=80),
         }
         batch = EloBatch(initial_states=states)
         pa_df = _make_pa_df([
@@ -61,12 +61,12 @@ class TestBatchWithInitialStates:
         ])
         batch.process(pa_df)
 
-        # Batter started at 1600, not 1500
+        # Batter started at 1600 (batting_elo), not 1500
         assert batch.pa_details[0]['batter_elo_before'] == 1600.0
         assert batch.pa_details[0]['pitcher_elo_before'] == 1400.0
         # PA count continues from pre-loaded value
-        assert batch.players[100].pa_count == 51
-        assert batch.players[200].pa_count == 81
+        assert batch.players[100].batting_pa == 51
+        assert batch.players[200].pitching_pa == 81
 
     def test_initial_states_backward_compat(self):
         """initial_states=None → 기존 동작과 동일 (모든 선수 1500 시작)."""
@@ -84,14 +84,14 @@ class TestBatchWithInitialStates:
 
     def test_new_player_during_incremental(self):
         """initial_states에 없는 선수가 PA에 등장 → INITIAL_ELO로 생성."""
-        states = {100: PlayerEloState(player_id=100, elo=1600.0)}
+        states = {100: PlayerEloState(player_id=100, batting_elo=1600.0)}
         batch = EloBatch(initial_states=states)
         pa_df = _make_pa_df([
             {'batter_id': 100, 'pitcher_id': 999, 'delta_run_exp': 0.2},
         ])
         batch.process(pa_df)
 
-        # Player 999 should start at INITIAL_ELO
+        # Player 999 should start at INITIAL_ELO (pitching_elo)
         assert batch.pa_details[0]['pitcher_elo_before'] == INITIAL_ELO
 
 
@@ -100,9 +100,9 @@ class TestActiveOnlyFilter:
         """active_only=True → 이번 실행에 활동한 선수만 반환."""
         # Pre-load 3 players, but only 2 are active
         states = {
-            100: PlayerEloState(player_id=100, elo=1600.0, pa_count=50),
-            200: PlayerEloState(player_id=200, elo=1400.0, pa_count=80),
-            300: PlayerEloState(player_id=300, elo=1550.0, pa_count=30),  # inactive
+            100: PlayerEloState(player_id=100, batting_elo=1600.0, batting_pa=50),
+            200: PlayerEloState(player_id=200, pitching_elo=1400.0, pitching_pa=80),
+            300: PlayerEloState(player_id=300, batting_elo=1550.0, batting_pa=30),  # inactive
         }
         batch = EloBatch(initial_states=states)
         pa_df = _make_pa_df([
@@ -161,8 +161,10 @@ class TestIncrementalMatchesFullSeason:
         for pid, state in batch_day1.players.items():
             day1_states[pid] = PlayerEloState(
                 player_id=pid,
-                elo=state.elo,
-                pa_count=state.pa_count,
+                batting_elo=state.batting_elo,
+                pitching_elo=state.pitching_elo,
+                batting_pa=state.batting_pa,
+                pitching_pa=state.pitching_pa,
                 cumulative_rv=0.0,  # reset as in pipeline
             )
 
@@ -171,13 +173,18 @@ class TestIncrementalMatchesFullSeason:
 
         # Compare final ELOs — should match exactly
         for pid in batch_full.players:
-            full_elo = batch_full.players[pid].elo
+            full_batting = batch_full.players[pid].batting_elo
+            full_pitching = batch_full.players[pid].pitching_elo
             if pid in batch_day2.players:
-                incr_elo = batch_day2.players[pid].elo
+                incr_batting = batch_day2.players[pid].batting_elo
+                incr_pitching = batch_day2.players[pid].pitching_elo
             else:
-                incr_elo = batch_day1.players[pid].elo
-            assert abs(full_elo - incr_elo) < 1e-10, \
-                f"Player {pid}: full={full_elo}, incremental={incr_elo}"
+                incr_batting = batch_day1.players[pid].batting_elo
+                incr_pitching = batch_day1.players[pid].pitching_elo
+            assert abs(full_batting - incr_batting) < 1e-10, \
+                f"Player {pid}: full batting={full_batting}, incremental={incr_batting}"
+            assert abs(full_pitching - incr_pitching) < 1e-10, \
+                f"Player {pid}: full pitching={full_pitching}, incremental={incr_pitching}"
 
     def test_incremental_pa_count_matches(self):
         """증분 처리 후 PA count도 전체 처리와 동일."""
@@ -199,7 +206,14 @@ class TestIncrementalMatchesFullSeason:
         batch_day1 = EloBatch()
         batch_day1.process(day1_pa)
         states = {
-            pid: PlayerEloState(pid, s.elo, s.pa_count, 0.0)
+            pid: PlayerEloState(
+                player_id=pid,
+                batting_elo=s.batting_elo,
+                pitching_elo=s.pitching_elo,
+                batting_pa=s.batting_pa,
+                pitching_pa=s.pitching_pa,
+                cumulative_rv=0.0,
+            )
             for pid, s in batch_day1.players.items()
         }
         batch_day2 = EloBatch(initial_states=states)
@@ -219,16 +233,19 @@ class TestLoadCurrentEloStates:
         client = MagicMock()
         response = MagicMock()
         response.data = [
-            {'player_id': 100, 'composite_elo': 1600.0, 'pa_count': 50},
-            {'player_id': 200, 'composite_elo': 1400.0, 'pa_count': 80},
+            {'player_id': 100, 'composite_elo': 1600.0, 'pa_count': 50,
+             'batting_elo': 1600.0, 'pitching_elo': 1500.0, 'batting_pa': 50, 'pitching_pa': 0},
+            {'player_id': 200, 'composite_elo': 1400.0, 'pa_count': 80,
+             'batting_elo': 1500.0, 'pitching_elo': 1400.0, 'batting_pa': 0, 'pitching_pa': 80},
         ]
         client.table.return_value.select.return_value.range.return_value.execute.return_value = response
 
         states = load_current_elo_states(client)
         assert len(states) == 2
-        assert states[100].elo == 1600.0
-        assert states[100].pa_count == 50
-        assert states[200].elo == 1400.0
+        assert states[100].batting_elo == 1600.0
+        assert states[100].batting_pa == 50
+        assert states[200].pitching_elo == 1400.0
+        assert states[200].pitching_pa == 80
         assert states[200].cumulative_rv == 0.0  # always reset
 
     def test_empty_table(self):

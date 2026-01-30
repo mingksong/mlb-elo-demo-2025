@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useLeaderboard } from '../hooks/useElo';
+import { useLeaderboard, useSeasonMeta } from '../hooks/useElo';
 import LeaderboardTable from '../components/leaderboard/LeaderboardTable';
 
 type PositionTab = 'batter' | 'pitcher';
@@ -13,6 +13,7 @@ export default function Leaderboard() {
   const limit = 20;
 
   const { data: players = [], isLoading } = useLeaderboard({ position, page, limit });
+  const { data: seasonMeta } = useSeasonMeta();
 
   useEffect(() => {
     setPage(1);
@@ -39,7 +40,7 @@ export default function Leaderboard() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Leaderboard</h2>
         <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-          2025 Season
+          {seasonMeta?.year ?? ''} Season
         </span>
       </div>
 
@@ -65,6 +66,7 @@ export default function Leaderboard() {
         players={players}
         isLoading={isLoading}
         startRank={(page - 1) * limit + 1}
+        position={position}
       />
 
       {/* Pagination */}

@@ -7,9 +7,10 @@ interface LeaderboardTableProps {
   players: LeaderboardPlayer[];
   isLoading?: boolean;
   startRank?: number;
+  position?: string;
 }
 
-export default function LeaderboardTable({ players, isLoading = false, startRank = 1 }: LeaderboardTableProps) {
+export default function LeaderboardTable({ players, isLoading = false, startRank = 1, position }: LeaderboardTableProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <table className="w-full">
@@ -44,6 +45,7 @@ export default function LeaderboardTable({ players, isLoading = false, startRank
                 key={player.player_id}
                 player={player}
                 rank={startRank + index}
+                position={position}
               />
             ))
           )}
@@ -53,10 +55,13 @@ export default function LeaderboardTable({ players, isLoading = false, startRank
   );
 }
 
-function LeaderboardRow({ player, rank }: { player: LeaderboardPlayer; rank: number }) {
+function LeaderboardRow({ player, rank, position }: { player: LeaderboardPlayer; rank: number; position?: string }) {
   const navigate = useNavigate();
-  const tier = getEloTier(player.composite_elo);
+  const roleElo = position === 'pitcher' ? player.pitching_elo : player.batting_elo;
+  const rolePa = position === 'pitcher' ? player.pitching_pa : player.batting_pa;
+  const tier = getEloTier(roleElo);
   const tierColor = getEloTierColor(tier);
+  const isTwoWay = player.batting_pa > 0 && player.pitching_pa > 0;
 
   return (
     <tr
@@ -64,7 +69,14 @@ function LeaderboardRow({ player, rank }: { player: LeaderboardPlayer; rank: num
       className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors"
     >
       <td className="px-4 py-3 text-sm font-bold text-gray-400">{rank}</td>
-      <td className="px-4 py-3 text-sm font-semibold text-gray-900">{player.full_name}</td>
+      <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+        {player.full_name}
+        {isTwoWay && (
+          <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+            TWP
+          </span>
+        )}
+      </td>
       <td className="px-4 py-3 text-sm text-gray-600">
         <div className="flex items-center gap-1.5">
           <TeamLogo size={20} />
@@ -72,9 +84,9 @@ function LeaderboardRow({ player, rank }: { player: LeaderboardPlayer; rank: num
         </div>
       </td>
       <td className={`px-4 py-3 text-sm font-bold text-right ${tierColor}`}>
-        {Math.round(player.composite_elo)}
+        {Math.round(roleElo)}
       </td>
-      <td className="px-4 py-3 text-sm text-right text-gray-500">{player.pa_count}</td>
+      <td className="px-4 py-3 text-sm text-right text-gray-500">{rolePa}</td>
       <td className="px-4 py-3 text-sm text-right text-gray-500">{player.last_game_date}</td>
     </tr>
   );

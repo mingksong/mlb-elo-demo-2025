@@ -251,8 +251,8 @@ def test_field_error_caps_batter_delta():
     assert result.batter_delta == 0.0
     assert result.pitcher_delta == 0.0
     # ELO unchanged
-    assert batter.elo == INITIAL_ELO
-    assert pitcher.elo == INITIAL_ELO
+    assert batter.batting_elo == INITIAL_ELO
+    assert pitcher.pitching_elo == INITIAL_ELO
 
 
 def test_field_error_negative_rv_unchanged():
@@ -341,7 +341,7 @@ def test_backward_compat_batch_no_extra_columns():
     batch.process(pa_df)
 
     expected_delta = K_FACTOR * 0.45
-    assert batch.players[100].elo == pytest.approx(INITIAL_ELO + expected_delta)
+    assert batch.players[100].batting_elo == pytest.approx(INITIAL_ELO + expected_delta)
 
 
 # === Batch with Upgrade Tests ===
@@ -368,4 +368,4 @@ def test_batch_with_upgrade_columns():
         # adjusted = 0.45 - 0.013 = 0.437
         # rv_diff = 0.437 - (-0.002) = 0.439
         expected_delta = K_FACTOR * (0.45 - 0.013 - (-0.002))
-        assert batch.players[100].elo == pytest.approx(INITIAL_ELO + expected_delta)
+        assert batch.players[100].batting_elo == pytest.approx(INITIAL_ELO + expected_delta)

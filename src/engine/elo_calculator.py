@@ -27,15 +27,35 @@ from src.engine.elo_config import INITIAL_ELO, MIN_ELO, K_FACTOR
 
 @dataclass
 class PlayerEloState:
-    """선수 ELO 상태."""
+    """선수 ELO 상태 (Two-Way Player 지원: batting/pitching 분리)."""
     player_id: int
-    elo: float = INITIAL_ELO
-    pa_count: int = 0
+    batting_elo: float = INITIAL_ELO
+    pitching_elo: float = INITIAL_ELO
+    batting_pa: int = 0
+    pitching_pa: int = 0
     cumulative_rv: float = 0.0
 
-    def apply_delta(self, delta: float) -> None:
-        """ELO 변화 적용 (하한선 보장)."""
-        self.elo = max(MIN_ELO, self.elo + delta)
+    @property
+    def elo(self) -> float:
+        """하위 호환용 composite ELO (가중 평균)."""
+        total = self.batting_pa + self.pitching_pa
+        if total == 0:
+            return INITIAL_ELO
+        return (self.batting_elo * self.batting_pa +
+                self.pitching_elo * self.pitching_pa) / total
+
+    @property
+    def pa_count(self) -> int:
+        """하위 호환용 총 PA."""
+        return self.batting_pa + self.pitching_pa
+
+    def apply_batting_delta(self, delta: float) -> None:
+        """타자 ELO 변화 적용 (하한선 보장)."""
+        self.batting_elo = max(MIN_ELO, self.batting_elo + delta)
+
+    def apply_pitching_delta(self, delta: float) -> None:
+        """투수 ELO 변화 적용 (하한선 보장)."""
+        self.pitching_elo = max(MIN_ELO, self.pitching_elo + delta)
 
 
 @dataclass
@@ -81,8 +101,8 @@ class EloCalculator:
         Returns:
             EloUpdateResult
         """
-        batter_elo_before = batter.elo
-        pitcher_elo_before = pitcher.elo
+        batter_elo_before = batter.batting_elo
+        pitcher_elo_before = pitcher.pitching_elo
 
         if delta_run_exp is not None:
             # Step 1: Park factor adjustment
@@ -109,8 +129,8 @@ class EloCalculator:
                 if pitcher_delta < 0:
                     pitcher_delta = 0.0
 
-            batter.apply_delta(batter_delta)
-            pitcher.apply_delta(pitcher_delta)
+            batter.apply_batting_delta(batter_delta)
+            pitcher.apply_pitching_delta(pitcher_delta)
 
             batter.cumulative_rv += delta_run_exp
             pitcher.cumulative_rv -= delta_run_exp
@@ -118,14 +138,14 @@ class EloCalculator:
             batter_delta = 0.0
             pitcher_delta = 0.0
 
-        batter.pa_count += 1
-        pitcher.pa_count += 1
+        batter.batting_pa += 1
+        pitcher.pitching_pa += 1
 
         return EloUpdateResult(
             batter_delta=batter_delta,
             pitcher_delta=pitcher_delta,
             batter_elo_before=batter_elo_before,
-            batter_elo_after=batter.elo,
+            batter_elo_after=batter.batting_elo,
             pitcher_elo_before=pitcher_elo_before,
-            pitcher_elo_after=pitcher.elo,
+            pitcher_elo_after=pitcher.pitching_elo,
         )

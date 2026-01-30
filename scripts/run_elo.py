@@ -93,6 +93,7 @@ def prepare_ohlc_records(daily_ohlc) -> list[dict]:
             'close': round(ohlc.close_elo, 4),
             'games_played': ohlc.games_played,
             'total_pa': ohlc.total_pa,
+            'role': ohlc.role,
         })
     return records
 
@@ -104,14 +105,14 @@ def print_summary(batch: EloBatch):
     print("=" * 60)
 
     players = batch.players
-    elos = [p.elo for p in players.values()]
 
     print(f"\nPlayers: {len(players):,}")
     print(f"PA Details: {len(batch.pa_details):,}")
     print(f"OHLC Records: {len(batch.daily_ohlc):,}")
 
-    # ELO distribution
-    print(f"\nELO Distribution:")
+    # ELO distribution (composite)
+    elos = [p.elo for p in players.values()]
+    print(f"\nComposite ELO Distribution:")
     print(f"  Mean: {sum(elos) / len(elos):.1f}")
     print(f"  Min: {min(elos):.1f}")
     print(f"  Max: {max(elos):.1f}")
@@ -122,39 +123,43 @@ def print_summary(batch: EloBatch):
     std = var ** 0.5
     print(f"  Std: {std:.1f}")
 
-    # Zero-sum check
-    total_delta = sum(p.elo - INITIAL_ELO for p in players.values())
+    # Zero-sum check (batting deltas + pitching deltas should net to 0)
+    batting_delta = sum(p.batting_elo - INITIAL_ELO for p in players.values())
+    pitching_delta = sum(p.pitching_elo - INITIAL_ELO for p in players.values())
     print(f"\nZero-Sum Check:")
-    print(f"  Net ELO change: {total_delta:+.2f}")
+    print(f"  Net batting ELO change: {batting_delta:+.2f}")
+    print(f"  Net pitching ELO change: {pitching_delta:+.2f}")
+    print(f"  Net total: {batting_delta + pitching_delta:+.2f}")
 
-    # Top 10 batters (by ELO, PA >= 100)
-    batter_ids = set()
-    pitcher_ids = set()
-    for d in batch.pa_details:
-        batter_ids.add(d['batter_id'])
-        pitcher_ids.add(d['pitcher_id'])
-
-    # Batters with PA >= 100
+    # Top 10 batters (by batting_elo, batting_pa >= 100)
     top_batters = sorted(
         [(pid, p) for pid, p in players.items()
-         if pid in batter_ids and p.pa_count >= 100],
-        key=lambda x: -x[1].elo
+         if p.batting_pa >= 100],
+        key=lambda x: -x[1].batting_elo
     )[:10]
 
-    print(f"\nTop 10 Batters (PA ≥ 100):")
+    print(f"\nTop 10 Batters (Batting PA ≥ 100):")
     for pid, p in top_batters:
-        print(f"  {pid}: ELO={p.elo:.1f} (PA={p.pa_count}, RV={p.cumulative_rv:+.1f})")
+        print(f"  {pid}: batting_elo={p.batting_elo:.1f} (PA={p.batting_pa}, RV={p.cumulative_rv:+.1f})")
 
-    # Top 10 pitchers (by ELO, PA >= 100)
+    # Top 10 pitchers (by pitching_elo, pitching_pa >= 100)
     top_pitchers = sorted(
         [(pid, p) for pid, p in players.items()
-         if pid in pitcher_ids and pid not in batter_ids and p.pa_count >= 100],
-        key=lambda x: -x[1].elo
+         if p.pitching_pa >= 100],
+        key=lambda x: -x[1].pitching_elo
     )[:10]
 
-    print(f"\nTop 10 Pitchers (BFP ≥ 100):")
+    print(f"\nTop 10 Pitchers (Pitching PA ≥ 100):")
     for pid, p in top_pitchers:
-        print(f"  {pid}: ELO={p.elo:.1f} (BFP={p.pa_count}, RV={p.cumulative_rv:+.1f})")
+        print(f"  {pid}: pitching_elo={p.pitching_elo:.1f} (BFP={p.pitching_pa}, RV={p.cumulative_rv:+.1f})")
+
+    # Two-Way Players
+    twp_players = [(pid, p) for pid, p in players.items()
+                   if p.batting_pa > 0 and p.pitching_pa > 0]
+    if twp_players:
+        print(f"\nTwo-Way Players ({len(twp_players)}):")
+        for pid, p in sorted(twp_players, key=lambda x: -x[1].elo):
+            print(f"  {pid}: batting={p.batting_elo:.1f}({p.batting_pa}PA) pitching={p.pitching_elo:.1f}({p.pitching_pa}BFP) composite={p.elo:.1f}")
 
 
 def main():

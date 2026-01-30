@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BookOpen, Code, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { useSeasonMeta } from '../hooks/useElo';
 
 type Tab = 'overview' | 'general' | 'developer';
 
@@ -108,7 +109,7 @@ function OverviewTab() {
         <ul className="list-disc pl-5 space-y-1">
           <li><strong>MLB Statcast</strong> via Baseball Savant</li>
           <li><strong>711,897 pitches</strong> aggregated into <strong>183,092 plate appearances</strong></li>
-          <li><strong>2,428 games</strong> across the 2025 season</li>
+          <li><strong>2,428 games</strong> across the current season</li>
           <li><strong>1,469 players</strong> (batters and pitchers)</li>
         </ul>
         <p className="mt-3 font-semibold text-gray-900">Key Metric: delta_run_exp</p>
@@ -243,6 +244,56 @@ function OverviewTab() {
                 <td className="px-3 py-2 font-bold text-elo-cold">Cold</td>
                 <td className="px-3 py-2">&lt; 1,200</td>
                 <td className="px-3 py-2">Significant slump</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Two-Way Players */}
+      <section>
+        <h3 className="text-xl font-bold text-gray-900 mb-3">Two-Way Players</h3>
+        <p>
+          Players who both bat and pitch — such as <strong>Shohei Ohtani</strong> — present
+          a unique challenge. A single ELO number blends two fundamentally different skill sets,
+          making it impossible to evaluate their hitting and pitching independently.
+        </p>
+        <p className="mt-2">
+          Our system tracks <strong>separate Batting ELO and Pitching ELO</strong> for every player.
+          When a player steps into the batter's box, only their Batting ELO is at stake. When they
+          take the mound, only their Pitching ELO moves. This separation ensures:
+        </p>
+        <ul className="list-disc pl-5 space-y-1 mt-2">
+          <li>A dominant outing on the mound doesn't inflate a player's batting rating</li>
+          <li>A slump at the plate doesn't drag down their pitching rating</li>
+          <li>The leaderboard ranks two-way players in <strong>both</strong> the Batter and Pitcher tabs using the correct role-specific ELO</li>
+        </ul>
+        <p className="mt-2">
+          Two-way players are marked with a{' '}
+          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">TWP</span>{' '}
+          badge throughout the site. Their profile page features <strong>Batting / Pitching tabs</strong> with
+          independent OHLC charts and statistics for each role.
+        </p>
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Field</th>
+                <th className="px-3 py-2 text-left font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-mono">batting_elo</td>
+                <td className="px-3 py-2">ELO earned exclusively from plate appearances as a batter</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">pitching_elo</td>
+                <td className="px-3 py-2">ELO earned exclusively from batters faced as a pitcher</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">composite_elo</td>
+                <td className="px-3 py-2">PA-weighted average of batting and pitching ELO</td>
               </tr>
             </tbody>
           </table>
@@ -483,6 +534,31 @@ function GeneralTab() {
         </p>
       </Accordion>
 
+      <Accordion title="Two-Way Players">
+        <p>
+          Players who both bat and pitch (e.g., Shohei Ohtani) have <strong>two independent ELO
+          ratings</strong> — one for batting and one for pitching. Each rating only changes when
+          the player acts in that role:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>Batting ELO</strong> updates when the player is at bat. Pitching ELO is unaffected.</li>
+          <li><strong>Pitching ELO</strong> updates when the player is on the mound. Batting ELO is unaffected.</li>
+          <li>The <strong>Composite ELO</strong> shown on the leaderboard is a weighted average based on PA count in each role.</li>
+        </ul>
+        <p>
+          On a two-way player's profile page, you can switch between{' '}
+          <strong>Batting</strong> and <strong>Pitching</strong> tabs to see separate OHLC
+          charts and statistics for each role. Two-way players appear in{' '}
+          <strong>both</strong> the Batter and Pitcher leaderboard tabs, ranked by their
+          role-specific ELO.
+        </p>
+        <p>
+          Look for the{' '}
+          <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">TWP</span>{' '}
+          badge in search results and leaderboards to identify two-way players.
+        </p>
+      </Accordion>
+
       <Accordion title="Reading the OHLC Chart">
         <p>
           Each player's profile includes an <strong>OHLC (Open-High-Low-Close)</strong> chart,
@@ -508,8 +584,8 @@ function GeneralTab() {
 
       <Accordion title="Disclaimer">
         <p>
-          This demo is based on <strong>2025 MLB Statcast data</strong> covering
-          approximately <strong>183,000 plate appearances</strong> across the full season.
+          This demo is based on <strong>MLB Statcast data</strong> covering
+          approximately <strong>183,000 plate appearances</strong> across the current season.
         </p>
         <p>
           The ELO ratings shown here are for demonstration and analytical purposes only.
@@ -541,7 +617,7 @@ function DeveloperTab() {
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Single-dimension ELO (no separate talent/skill component)</li>
-          <li>Single season (2025) — no year-over-year normalization</li>
+          <li>Single season — no year-over-year normalization</li>
           <li><strong>State normalization</strong> — adjusts for base-out situation (24 states)</li>
           <li><strong>Park factor</strong> — adjusts for venue scoring environment (30 stadiums)</li>
           <li><strong>Field error handling</strong> — prevents unearned ELO credit on errors</li>
@@ -617,7 +693,7 @@ function DeveloperTab() {
         <ul className="list-disc pl-5 space-y-1">
           <li>Source: MLB Statcast via Baseball Savant</li>
           <li>Format: Parquet file (~711K pitches, 118 columns)</li>
-          <li>Coverage: 2025 season (2,428 games)</li>
+          <li>Coverage: Current season (2,428 games)</li>
         </ul>
         <h4 className="font-semibold mt-2">2. ETL (Pitch → PA)</h4>
         <ul className="list-disc pl-5 space-y-1">
@@ -653,6 +729,37 @@ function DeveloperTab() {
         </p>
       </Accordion>
 
+      <Accordion title="Two-Way Player Implementation">
+        <p>
+          The engine tracks <strong>separate batting and pitching ELO</strong> for every player via
+          the <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">PlayerEloState</code> dataclass:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1">
+          <p>batting_elo:  float  <span className="text-gray-500"># updated only when batting</span></p>
+          <p>pitching_elo: float  <span className="text-gray-500"># updated only when pitching</span></p>
+          <p>batting_pa:   int    <span className="text-gray-500"># plate appearances as batter</span></p>
+          <p>pitching_pa:  int    <span className="text-gray-500"># batters faced as pitcher</span></p>
+        </div>
+        <p className="mt-2">
+          During <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">process_plate_appearance()</code>,
+          the batter's <strong>batting_elo</strong> and the pitcher's <strong>pitching_elo</strong> are
+          used to compute deltas. Pure batters have a dormant pitching_elo at 1,500, and vice versa.
+        </p>
+        <p className="mt-2">
+          OHLC records are keyed by <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">(player_id, role)</code>,
+          where <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">role</code> is either
+          {' '}<code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">BATTING</code> or{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">PITCHING</code>.
+          This means a two-way player generates two OHLC entries per game day — one for each role.
+        </p>
+        <p className="mt-2">
+          The <strong>composite_elo</strong> is a backward-compatible weighted average:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm mt-1">
+          composite = (batting_elo × batting_pa + pitching_elo × pitching_pa) / total_pa
+        </div>
+      </Accordion>
+
       <Accordion title="Database Schema">
         <p>
           The system uses Supabase (PostgreSQL) with the following key tables:
@@ -680,7 +787,7 @@ function DeveloperTab() {
               <tr>
                 <td className="px-3 py-2 font-mono">player_elo</td>
                 <td className="px-3 py-2">1,469</td>
-                <td className="px-3 py-2">Current ELO + PA count per player</td>
+                <td className="px-3 py-2">Current ELO per player (batting_elo, pitching_elo, composite_elo)</td>
               </tr>
               <tr>
                 <td className="px-3 py-2 font-mono">elo_pa_detail</td>
@@ -689,8 +796,8 @@ function DeveloperTab() {
               </tr>
               <tr>
                 <td className="px-3 py-2 font-mono">daily_ohlc</td>
-                <td className="px-3 py-2">69,125</td>
-                <td className="px-3 py-2">Daily OHLC candlestick data per player</td>
+                <td className="px-3 py-2">69,215</td>
+                <td className="px-3 py-2">Daily OHLC candlestick data per player per role (BATTING / PITCHING)</td>
               </tr>
             </tbody>
           </table>
@@ -721,6 +828,8 @@ function DeveloperTab() {
 
 export default function Guide() {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const { data: seasonMeta } = useSeasonMeta();
+  const seasonYear = seasonMeta?.year ?? '';
 
   return (
     <div className="space-y-6">
@@ -728,7 +837,7 @@ export default function Guide() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Guide</h2>
         <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-          2025 Season
+          {seasonYear} Season
         </span>
       </div>
 

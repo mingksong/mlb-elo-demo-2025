@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { HotColdPlayer, PlayerElo, Player, DailyOhlc, PlayerStats, LeagueSummary, PlayerSearchResult } from '../types/elo';
+import type { HotColdPlayer, PlayerElo, Player, DailyOhlc, PlayerStats, LeagueSummary, PlayerSearchResult, SeasonMeta } from '../types/elo';
 
 export async function getHotPlayers(date: string): Promise<HotColdPlayer[]> {
   const { data, error } = await supabase
@@ -68,7 +68,11 @@ export interface LeaderboardParams {
 export interface LeaderboardPlayer {
   player_id: number;
   composite_elo: number;
+  batting_elo: number;
+  pitching_elo: number;
   pa_count: number;
+  batting_pa: number;
+  pitching_pa: number;
   last_game_date: string;
   full_name: string;
   team: string;
@@ -79,17 +83,17 @@ export async function getLeaderboard(params: LeaderboardParams): Promise<Leaderb
   const { position, page = 1, limit = 20 } = params;
   const offset = (page - 1) * limit;
 
+  // Sort by role-appropriate ELO
+  const sortColumn = position === 'pitcher' ? 'pitching_elo' : 'batting_elo';
+  // Filter by role-specific PA > 0 (TWP appear in both tabs)
+  const paColumn = position === 'pitcher' ? 'pitching_pa' : 'batting_pa';
+
   let query = supabase
     .from('player_elo')
-    .select('player_id, composite_elo, pa_count, last_game_date, players!inner(full_name, team, position)')
-    .order('composite_elo', { ascending: false })
+    .select('player_id, composite_elo, batting_elo, pitching_elo, pa_count, batting_pa, pitching_pa, last_game_date, players!inner(full_name, team, position)')
+    .gt(paColumn, 0)
+    .order(sortColumn, { ascending: false })
     .range(offset, offset + limit - 1);
-
-  if (position === 'pitcher') {
-    query = query.eq('players.position', 'pitcher');
-  } else if (position === 'batter') {
-    query = query.neq('players.position', 'pitcher');
-  }
 
   const { data, error } = await query;
 
@@ -100,7 +104,11 @@ export async function getLeaderboard(params: LeaderboardParams): Promise<Leaderb
     return {
       player_id: row.player_id as number,
       composite_elo: row.composite_elo as number,
+      batting_elo: (row.batting_elo as number) ?? 1500,
+      pitching_elo: (row.pitching_elo as number) ?? 1500,
       pa_count: row.pa_count as number,
+      batting_pa: (row.batting_pa as number) ?? 0,
+      pitching_pa: (row.pitching_pa as number) ?? 0,
       last_game_date: row.last_game_date as string,
       full_name: p.full_name as string,
       team: p.team as string,
@@ -112,7 +120,7 @@ export async function getLeaderboard(params: LeaderboardParams): Promise<Leaderb
 export async function getPlayerElo(playerId: string): Promise<PlayerElo & { player: Player }> {
   const { data, error } = await supabase
     .from('player_elo')
-    .select('player_id, composite_elo, pa_count, last_game_date, players!inner(player_id, full_name, team, position)')
+    .select('player_id, composite_elo, batting_elo, pitching_elo, pa_count, batting_pa, pitching_pa, last_game_date, players!inner(player_id, full_name, team, position)')
     .eq('player_id', playerId)
     .single();
 
@@ -122,7 +130,11 @@ export async function getPlayerElo(playerId: string): Promise<PlayerElo & { play
   return {
     player_id: data.player_id,
     composite_elo: data.composite_elo,
+    batting_elo: data.batting_elo ?? 1500,
+    pitching_elo: data.pitching_elo ?? 1500,
     pa_count: data.pa_count,
+    batting_pa: data.batting_pa ?? 0,
+    pitching_pa: data.pitching_pa ?? 0,
     last_game_date: data.last_game_date,
     player: {
       player_id: p.player_id as number,
@@ -133,20 +145,26 @@ export async function getPlayerElo(playerId: string): Promise<PlayerElo & { play
   };
 }
 
-export async function getPlayerOhlc(playerId: string): Promise<DailyOhlc[]> {
-  const { data, error } = await supabase
+export async function getPlayerOhlc(playerId: string, role?: string): Promise<DailyOhlc[]> {
+  let query = supabase
     .from('daily_ohlc')
-    .select('game_date, open, high, low, close, delta, total_pa')
+    .select('game_date, open, high, low, close, delta, total_pa, role')
     .eq('player_id', playerId)
     .eq('elo_type', 'SEASON')
     .order('game_date');
+
+  if (role) {
+    query = query.eq('role', role);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw error;
   return (data ?? []) as DailyOhlc[];
 }
 
-export async function getPlayerStats(playerId: string): Promise<PlayerStats> {
-  const ohlcData = await getPlayerOhlc(playerId);
+export async function getPlayerStats(playerId: string, role?: string): Promise<PlayerStats> {
+  const ohlcData = await getPlayerOhlc(playerId, role);
 
   if (ohlcData.length === 0) {
     return {
@@ -189,12 +207,21 @@ export async function searchPlayers(query: string): Promise<PlayerSearchResult[]
 
   const { data, error } = await supabase
     .from('players')
-    .select('player_id, full_name, team, position')
+    .select('player_id, full_name, team, position, player_elo(batting_pa, pitching_pa)')
     .ilike('full_name', `%${query}%`)
     .limit(10);
 
   if (error) throw error;
-  return (data ?? []) as PlayerSearchResult[];
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const elo = row.player_elo as Record<string, unknown> | null;
+    return {
+      player_id: row.player_id as number,
+      full_name: row.full_name as string,
+      team: row.team as string,
+      position: row.position as string,
+      is_two_way: elo ? ((elo.batting_pa as number) > 0 && (elo.pitching_pa as number) > 0) : false,
+    };
+  });
 }
 
 export async function getLeagueSummary(): Promise<LeagueSummary> {
@@ -226,5 +253,29 @@ export async function getLatestDate(): Promise<string> {
     .limit(1);
 
   if (error) throw error;
-  return data?.[0]?.game_date ?? '2025-09-28';
+  return data?.[0]?.game_date ?? new Date().toISOString().slice(0, 10);
+}
+
+export async function getSeasonMeta(): Promise<SeasonMeta> {
+  const [earliest, latest] = await Promise.all([
+    supabase
+      .from('daily_ohlc')
+      .select('game_date')
+      .order('game_date', { ascending: true })
+      .limit(1),
+    supabase
+      .from('daily_ohlc')
+      .select('game_date')
+      .order('game_date', { ascending: false })
+      .limit(1),
+  ]);
+
+  if (earliest.error) throw earliest.error;
+  if (latest.error) throw latest.error;
+
+  const startDate = earliest.data?.[0]?.game_date ?? '';
+  const endDate = latest.data?.[0]?.game_date ?? '';
+  const year = startDate ? new Date(startDate).getFullYear() : new Date().getFullYear();
+
+  return { year, startDate, endDate };
 }

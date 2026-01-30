@@ -34,18 +34,18 @@ export function usePlayerElo(playerId: string) {
   });
 }
 
-export function usePlayerOhlc(playerId: string) {
+export function usePlayerOhlc(playerId: string, role?: string) {
   return useQuery({
-    queryKey: ['playerOhlc', playerId],
-    queryFn: () => eloApi.getPlayerOhlc(playerId),
+    queryKey: ['playerOhlc', playerId, role],
+    queryFn: () => eloApi.getPlayerOhlc(playerId, role),
     enabled: !!playerId,
   });
 }
 
-export function usePlayerStats(playerId: string) {
+export function usePlayerStats(playerId: string, role?: string) {
   return useQuery({
-    queryKey: ['playerStats', playerId],
-    queryFn: () => eloApi.getPlayerStats(playerId),
+    queryKey: ['playerStats', playerId, role],
+    queryFn: () => eloApi.getPlayerStats(playerId, role),
     enabled: !!playerId,
   });
 }
@@ -70,6 +70,14 @@ export function useLatestDate() {
   return useQuery({
     queryKey: ['latestDate'],
     queryFn: () => eloApi.getLatestDate(),
+    staleTime: 300_000,
+  });
+}
+
+export function useSeasonMeta() {
+  return useQuery({
+    queryKey: ['seasonMeta'],
+    queryFn: () => eloApi.getSeasonMeta(),
     staleTime: 300_000,
   });
 }

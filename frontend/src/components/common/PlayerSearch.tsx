@@ -60,8 +60,13 @@ export default function PlayerSearch() {
                 <span className="font-medium">{player.full_name}</span>
                 <span className="text-gray-400">|</span>
                 <span className="text-sm text-gray-600">
-                  {player.position === 'pitcher' ? 'Pitcher' : 'Batter'}
+                  {player.is_two_way ? 'Two-Way' : player.position === 'pitcher' ? 'Pitcher' : 'Batter'}
                 </span>
+                {player.is_two_way && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                    TWP
+                  </span>
+                )}
                 <span className="text-gray-400">|</span>
                 <span className="text-sm text-gray-500">{player.team}</span>
               </button>

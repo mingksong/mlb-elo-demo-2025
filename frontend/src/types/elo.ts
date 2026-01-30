@@ -8,7 +8,11 @@ export interface Player {
 export interface PlayerElo {
   player_id: number;
   composite_elo: number;
+  batting_elo: number;
+  pitching_elo: number;
   pa_count: number;
+  batting_pa: number;
+  pitching_pa: number;
   last_game_date: string;
   player?: Player;
 }
@@ -21,6 +25,7 @@ export interface DailyOhlc {
   close: number;
   delta: number;
   total_pa: number;
+  role: string;
 }
 
 export interface PlayerStats {
@@ -56,6 +61,13 @@ export interface PlayerSearchResult {
   full_name: string;
   team: string;
   position: string;
+  is_two_way: boolean;
+}
+
+export interface SeasonMeta {
+  year: number;
+  startDate: string;
+  endDate: string;
 }
 
 export type EloTier = 'elite' | 'high' | 'above' | 'average' | 'below' | 'low' | 'cold';

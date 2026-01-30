@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import DatePicker from '../components/dashboard/DatePicker';
 import HotColdSection from '../components/dashboard/HotColdSection';
 import LeagueSummary from '../components/dashboard/LeagueSummary';
-import { useHotPlayers, useColdPlayers, useLeagueSummary, useLatestDate } from '../hooks/useElo';
+import { useHotPlayers, useColdPlayers, useLeagueSummary, useLatestDate, useSeasonMeta } from '../hooks/useElo';
 
 export default function Dashboard() {
   const { data: latestDate } = useLatestDate();
+  const { data: seasonMeta } = useSeasonMeta();
   const [selectedDate, setSelectedDate] = useState('');
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export default function Dashboard() {
           <p className="text-gray-500 mt-1">
             Player ELO fluctuations for the selected date.
             <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-              2025 Season
+              {seasonMeta?.year ?? ''} Season
             </span>
           </p>
         </div>
@@ -35,8 +36,8 @@ export default function Dashboard() {
           <DatePicker
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
-            minDate="2025-03-27"
-            maxDate={latestDate ?? '2025-09-28'}
+            minDate={seasonMeta?.startDate ?? ''}
+            maxDate={seasonMeta?.endDate ?? latestDate ?? ''}
           />
         )}
       </div>

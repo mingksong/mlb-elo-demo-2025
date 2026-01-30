@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react';
 import EloCandlestickChart from '../components/player/EloCandlestickChart';
@@ -6,16 +7,103 @@ import { getTeamBorderColor } from '../utils/teamColors';
 import { usePlayerElo, usePlayerOhlc, usePlayerStats } from '../hooks/useElo';
 import TeamLogo from '../components/common/TeamLogo';
 
+type RoleTab = 'BATTING' | 'PITCHING';
+
+function EloCard({ label, elo, delta, paCount }: { label: string; elo: number; delta: number; paCount: number }) {
+  const tier = getEloTier(elo);
+  const tierColor = getEloTierColor(tier);
+  const DeltaIcon = delta > 0 ? TrendingUp : TrendingDown;
+  const deltaColor = delta > 0 ? 'text-delta-up' : delta < 0 ? 'text-delta-down' : 'text-gray-500';
+  const deltaSign = delta > 0 ? '+' : '';
+
+  return (
+    <div className="text-center p-4 rounded-lg bg-primary/10 ring-2 ring-primary">
+      <div className="text-sm text-gray-500 mb-1">{label}</div>
+      <div className={`text-3xl font-bold ${tierColor}`}>
+        {Math.round(elo)}
+      </div>
+      <div className={`flex items-center justify-center gap-1 ${deltaColor} mt-1`}>
+        <DeltaIcon className="w-4 h-4" />
+        <span>{deltaSign}{Math.round(delta)}</span>
+      </div>
+      <div className="text-xs text-gray-400 mt-1">{paCount} PA</div>
+    </div>
+  );
+}
+
+function StatsGrid({ stats }: { stats: { totalPa: number; avgDelta: number; highestElo: { value: number; date: string }; lowestElo: { value: number; date: string }; avgRange: number } }) {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div>
+        <div className="text-sm text-gray-500">Total PA</div>
+        <div className="text-xl font-bold text-gray-900">{stats.totalPa}</div>
+      </div>
+      <div>
+        <div className="text-sm text-gray-500">Avg Delta/Day</div>
+        <div className={`text-xl font-bold ${stats.avgDelta >= 0 ? 'text-delta-up' : 'text-delta-down'}`}>
+          {stats.avgDelta >= 0 ? '+' : ''}{stats.avgDelta.toFixed(1)}
+        </div>
+      </div>
+      <div>
+        <div className="text-sm text-gray-500">Highest ELO</div>
+        <div className="text-xl font-bold text-elo-elite">{Math.round(stats.highestElo.value)}</div>
+        <div className="text-xs text-gray-400">{stats.highestElo.date}</div>
+      </div>
+      <div>
+        <div className="text-sm text-gray-500">Lowest ELO</div>
+        <div className="text-xl font-bold text-elo-cold">{Math.round(stats.lowestElo.value)}</div>
+        <div className="text-xs text-gray-400">{stats.lowestElo.date}</div>
+      </div>
+      <div>
+        <div className="text-sm text-gray-500">Avg Range</div>
+        <div className="text-xl font-bold text-gray-900">{stats.avgRange.toFixed(1)}</div>
+      </div>
+    </div>
+  );
+}
+
+function RoleSection({ playerId, role }: { playerId: string; role: RoleTab }) {
+  const { data: ohlcData, isLoading: ohlcLoading } = usePlayerOhlc(playerId, role);
+  const { data: stats, isLoading: statsLoading } = usePlayerStats(playerId, role);
+
+  if (ohlcLoading || statsLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-sm p-6 h-[400px] animate-pulse">
+          <div className="h-full bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-lg font-semibold mb-4">
+          {role === 'BATTING' ? 'Batting' : 'Pitching'} ELO History
+        </h3>
+        <EloCandlestickChart data={ohlcData ?? []} height={400} />
+      </div>
+
+      {stats && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {role === 'BATTING' ? 'Batting' : 'Pitching'} Statistics
+          </h3>
+          <StatsGrid stats={stats} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlayerProfile() {
   const { playerId } = useParams<{ playerId: string }>();
+  const [activeRole, setActiveRole] = useState<RoleTab>('BATTING');
 
   const { data: playerElo, isLoading: eloLoading } = usePlayerElo(playerId ?? '');
-  const { data: ohlcData, isLoading: ohlcLoading } = usePlayerOhlc(playerId ?? '');
-  const { data: playerStats, isLoading: statsLoading } = usePlayerStats(playerId ?? '');
 
-  const isLoading = eloLoading || ohlcLoading || statsLoading;
-
-  if (isLoading) {
+  if (eloLoading) {
     return (
       <div className="space-y-6">
         <Link to="/" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
@@ -52,17 +140,28 @@ export default function PlayerProfile() {
     );
   }
 
-  const { player, composite_elo, pa_count } = playerElo;
-  const tier = getEloTier(composite_elo);
-  const tierColor = getEloTierColor(tier);
+  const { player, batting_elo, pitching_elo, batting_pa, pitching_pa } = playerElo;
+  const isTwoWay = batting_pa > 0 && pitching_pa > 0;
   const teamColor = getTeamBorderColor(player.team);
 
-  // Compute daily delta from latest OHLC
-  const latestOhlc = ohlcData && ohlcData.length > 0 ? ohlcData[ohlcData.length - 1] : null;
-  const delta = latestOhlc?.delta ?? 0;
-  const DeltaIcon = delta > 0 ? TrendingUp : TrendingDown;
-  const deltaColor = delta > 0 ? 'text-delta-up' : delta < 0 ? 'text-delta-down' : 'text-gray-500';
-  const deltaSign = delta > 0 ? '+' : '';
+  // Determine display role label
+  const positionLabel = isTwoWay
+    ? 'Two-Way Player'
+    : player.position === 'pitcher'
+      ? 'Pitcher'
+      : 'Batter';
+
+  // For non-TWP, determine primary role
+  const primaryRole: RoleTab = player.position === 'pitcher' && !isTwoWay ? 'PITCHING' : 'BATTING';
+  const displayElo = isTwoWay
+    ? (activeRole === 'BATTING' ? batting_elo : pitching_elo)
+    : (primaryRole === 'PITCHING' ? pitching_elo : batting_elo);
+  const displayPa = isTwoWay
+    ? (activeRole === 'BATTING' ? batting_pa : pitching_pa)
+    : (primaryRole === 'PITCHING' ? pitching_pa : batting_pa);
+
+  // For delta, we use the role-filtered OHLC (loaded in RoleSection), so show 0 here
+  const currentRole = isTwoWay ? activeRole : primaryRole;
 
   return (
     <div className="space-y-6">
@@ -87,63 +186,53 @@ export default function PlayerProfile() {
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900">{player.full_name}</h1>
             <p className="text-gray-600">
-              {player.team} | {player.position === 'pitcher' ? 'Pitcher' : 'Batter'}
+              {player.team} | {positionLabel}
+              {isTwoWay && (
+                <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700">
+                  TWP
+                </span>
+              )}
             </p>
           </div>
 
           {/* ELO Stats */}
-          <div className="text-center p-4 rounded-lg bg-primary/10 ring-2 ring-primary">
-            <div className="text-sm text-gray-500 mb-1">Season ELO</div>
-            <div className={`text-3xl font-bold ${tierColor}`}>
-              {Math.round(composite_elo)}
+          {isTwoWay ? (
+            <div className="flex gap-3">
+              <EloCard label="Batting ELO" elo={batting_elo} delta={0} paCount={batting_pa} />
+              <EloCard label="Pitching ELO" elo={pitching_elo} delta={0} paCount={pitching_pa} />
             </div>
-            <div className={`flex items-center justify-center gap-1 ${deltaColor} mt-1`}>
-              <DeltaIcon className="w-4 h-4" />
-              <span>{deltaSign}{Math.round(delta)}</span>
-            </div>
-            <div className="text-xs text-gray-400 mt-1">{pa_count} PA</div>
-          </div>
+          ) : (
+            <EloCard
+              label="Season ELO"
+              elo={displayElo}
+              delta={0}
+              paCount={displayPa}
+            />
+          )}
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">Season ELO History</h3>
-        <EloCandlestickChart data={ohlcData ?? []} height={400} />
-      </div>
-
-      {/* Season Stats */}
-      {playerStats && (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Season Statistics</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div>
-              <div className="text-sm text-gray-500">Total PA</div>
-              <div className="text-xl font-bold text-gray-900">{playerStats.totalPa}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Avg Delta/Day</div>
-              <div className={`text-xl font-bold ${playerStats.avgDelta >= 0 ? 'text-delta-up' : 'text-delta-down'}`}>
-                {playerStats.avgDelta >= 0 ? '+' : ''}{playerStats.avgDelta.toFixed(1)}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Highest ELO</div>
-              <div className="text-xl font-bold text-elo-elite">{Math.round(playerStats.highestElo.value)}</div>
-              <div className="text-xs text-gray-400">{playerStats.highestElo.date}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Lowest ELO</div>
-              <div className="text-xl font-bold text-elo-cold">{Math.round(playerStats.lowestElo.value)}</div>
-              <div className="text-xs text-gray-400">{playerStats.lowestElo.date}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-500">Avg Range</div>
-              <div className="text-xl font-bold text-gray-900">{playerStats.avgRange.toFixed(1)}</div>
-            </div>
-          </div>
+      {/* TWP Role Tabs */}
+      {isTwoWay && (
+        <div className="flex gap-2">
+          {(['BATTING', 'PITCHING'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveRole(tab)}
+              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                activeRole === tab
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {tab === 'BATTING' ? 'Batting' : 'Pitching'}
+            </button>
+          ))}
         </div>
       )}
+
+      {/* Chart + Stats (role-filtered) */}
+      <RoleSection playerId={playerId ?? ''} role={currentRole} />
     </div>
   );
 }

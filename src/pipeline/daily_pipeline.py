@@ -44,7 +44,7 @@ def load_current_elo_states(client) -> dict[int, PlayerEloState]:
     while True:
         response = (
             client.table('player_elo')
-            .select('player_id, composite_elo, pa_count')
+            .select('player_id, composite_elo, pa_count, batting_elo, pitching_elo, batting_pa, pitching_pa')
             .range(offset, offset + page_size - 1)
             .execute()
         )
@@ -61,8 +61,10 @@ def load_current_elo_states(client) -> dict[int, PlayerEloState]:
         pid = row['player_id']
         states[pid] = PlayerEloState(
             player_id=pid,
-            elo=row.get('composite_elo', INITIAL_ELO) or INITIAL_ELO,
-            pa_count=row.get('pa_count', 0) or 0,
+            batting_elo=row.get('batting_elo', INITIAL_ELO) or INITIAL_ELO,
+            pitching_elo=row.get('pitching_elo', INITIAL_ELO) or INITIAL_ELO,
+            batting_pa=row.get('batting_pa', 0) or 0,
+            pitching_pa=row.get('pitching_pa', 0) or 0,
             cumulative_rv=0.0,
         )
 
@@ -148,6 +150,7 @@ def _prepare_ohlc_records(daily_ohlc) -> list[dict]:
             'close': round(ohlc.close_elo, 4),
             'games_played': ohlc.games_played,
             'total_pa': ohlc.total_pa,
+            'role': ohlc.role,
         })
     return records
 
