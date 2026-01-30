@@ -6,6 +6,7 @@ import { getEloTier, getEloTierColor } from '../types/elo';
 import { getTeamBorderColor } from '../utils/teamColors';
 import { usePlayerElo, usePlayerOhlc, usePlayerStats } from '../hooks/useElo';
 import TeamLogo from '../components/common/TeamLogo';
+import TalentCardSection from '../components/player/TalentCardSection';
 
 type RoleTab = 'BATTING' | 'PITCHING';
 
@@ -231,6 +232,11 @@ export default function PlayerProfile() {
         </div>
       )}
 
+      {/* Talent Cards */}
+      <TalentCardSection
+        playerId={playerId ?? ''}
+        position={currentRole === 'PITCHING' ? 'pitcher' : 'batter'}
+      />
       {/* Chart + Stats (role-filtered) */}
       <RoleSection playerId={playerId ?? ''} role={currentRole} />
     </div>
