@@ -27,6 +27,7 @@ from src.engine.elo_batch import EloBatch
 from src.engine.elo_config import INITIAL_ELO
 from src.engine.re24_baseline import RE24Baseline
 from src.engine.park_factor import ParkFactor
+from src.engine.talent_batch import TalentBatch
 from src.etl.upload_to_supabase import get_supabase_client, upload_table
 
 
@@ -183,6 +184,15 @@ def main():
     batch = EloBatch(re24_baseline=baseline, park_factor=park_factor)
     batch.process(pa_df)
 
+    # 3b. Run talent ELO calculation
+    print("\nRunning 9D Talent ELO calculation...")
+    talent_batch = TalentBatch()
+    talent_batch.process(pa_df)
+    print(f"  Talent PA details: {len(talent_batch.talent_pa_details):,}")
+    print(f"  Talent OHLC records: {len(talent_batch.talent_daily_ohlc):,}")
+    talent_records = talent_batch.get_talent_player_records()
+    print(f"  Talent player records: {len(talent_records):,}")
+
     # 4. Summary
     print_summary(batch)
 
@@ -209,6 +219,40 @@ def main():
     n = upload_table(client, 'daily_ohlc', ohlc_records, batch_size=1000)
     print(f"  Uploaded: {n:,}")
 
+    # 5d. talent_player_current
+    print("\n--- talent_player_current ---")
+    n = upload_table(client, 'talent_player_current', talent_records, batch_size=1000)
+    print(f"  Uploaded: {n:,}")
+
+    # 5e. talent_pa_detail
+    print("\n--- talent_pa_detail ---")
+    talent_pa_records = [{
+        'pa_id': d['pa_id'],
+        'player_id': d['player_id'],
+        'player_role': d['player_role'],
+        'talent_type': d['talent_type'],
+        'elo_before': round(d['elo_before'], 4),
+        'elo_after': round(d['elo_after'], 4),
+    } for d in talent_batch.talent_pa_details]
+    n = upload_table(client, 'talent_pa_detail', talent_pa_records, batch_size=1000)
+    print(f"  Uploaded: {n:,}")
+
+    # 5f. talent_daily_ohlc
+    print("\n--- talent_daily_ohlc ---")
+    talent_ohlc_records = [{
+        'player_id': o['player_id'],
+        'game_date': o['game_date'],
+        'talent_type': o['talent_type'],
+        'elo_type': o['elo_type'],
+        'open_elo': round(o['open'], 4),
+        'high_elo': round(o['high'], 4),
+        'low_elo': round(o['low'], 4),
+        'close_elo': round(o['close'], 4),
+        'total_pa': o['total_pa'],
+    } for o in talent_batch.talent_daily_ohlc]
+    n = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records, batch_size=1000)
+    print(f"  Uploaded: {n:,}")
+
     # 6. Verify
     print("\n--- Verification ---")
     r = client.table('player_elo').select('player_id', count='exact').execute()
@@ -217,6 +261,12 @@ def main():
     print(f"  elo_pa_detail: {r.count} rows")
     r = client.table('daily_ohlc').select('id', count='exact').execute()
     print(f"  daily_ohlc: {r.count} rows")
+    r = client.table('talent_player_current').select('player_id', count='exact').execute()
+    print(f"  talent_player_current: {r.count} rows")
+    r = client.table('talent_pa_detail').select('id', count='exact').execute()
+    print(f"  talent_pa_detail: {r.count} rows")
+    r = client.table('talent_daily_ohlc').select('id', count='exact').execute()
+    print(f"  talent_daily_ohlc: {r.count} rows")
 
     print("\nDone!")
 
