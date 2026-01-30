@@ -204,12 +204,10 @@ class TestMatchupEffect:
         assert r1.batter_deltas[BatterTalentState.CONTACT] < \
                r2.batter_deltas[BatterTalentState.CONTACT]
 
-    def test_speed_has_no_matchup(self, engine):
-        """Speed dimension uses 0.5 baseline (no pitcher matchup)."""
+    def test_speed_is_disabled(self, engine):
+        """Speed dimension is disabled in V2.1 — all weights are 0.0."""
         b = BatterTalentState(player_id=1)
         p = PitcherTalentState(player_id=2)
-        # Even if pitcher is very strong, speed delta should be independent
-        p.elo_dimensions[:] = 1800.0  # Very strong pitcher
         result = engine.process_plate_appearance(b, p, result_type="Triple")
-        # Speed delta should be non-zero (Triple has speed=0.8)
-        assert result.batter_deltas[BatterTalentState.SPEED] != 0.0
+        # Speed delta should be zero (all speed weights set to 0.0 in V2.1)
+        assert result.batter_deltas[BatterTalentState.SPEED] == 0.0
