@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { BookOpen, Code, Info, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { BookOpen, Code, Info, ChevronDown, ChevronUp, Sparkles, Crosshair } from 'lucide-react';
 import { useSeasonMeta } from '../hooks/useElo';
 
-type Tab = 'overview' | 'general' | 'talent' | 'developer';
+type Tab = 'overview' | 'general' | 'talent' | 'matchup' | 'developer';
 
 function Accordion({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -763,6 +763,511 @@ function TalentTab() {
   );
 }
 
+function MatchupEngineTab() {
+  return (
+    <div className="space-y-4">
+      <Accordion title="What is the Matchup Predictor?" defaultOpen>
+        <p>
+          The <strong>Matchup Predictor</strong> forecasts the outcome distribution of a single
+          plate appearance between a specific batter and pitcher. Rather than using historical
+          head-to-head data (which is sparse), it combines each player's <strong>Talent ELO
+          dimensions</strong> to model the interaction from first principles.
+        </p>
+        <p>
+          The prediction runs entirely in the browser — no backend calls needed beyond fetching
+          each player's current talent ELO ratings from the database. The algorithm is a direct
+          port of the V2.1 z-score matchup predictor.
+        </p>
+        <p>
+          The output is a 7-outcome probability distribution: <strong>BB, K, OUT, 1B, 2B, 3B, HR</strong>,
+          plus derived metrics like expected wOBA, on-base percentage, and expected slugging.
+        </p>
+      </Accordion>
+
+      <Accordion title="Architecture: Browser-Side Prediction">
+        <p>
+          The entire prediction pipeline runs client-side:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 overflow-x-auto">
+          <p>[User selects Batter + Pitcher]</p>
+          <p>{'  '}&rarr; Supabase: fetch talent_player_current for both (2 parallel queries)</p>
+          <p>{'  '}&rarr; predictPlateAppearance() &mdash; pure TypeScript math</p>
+          <p>{'  '}&rarr; Render: FinalPrediction + MatchupBar + StageResults</p>
+        </div>
+        <p className="mt-2">
+          The <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">predictPlateAppearance()</code> function
+          is a <strong>pure function</strong> — no side effects, no network calls, deterministic output.
+          Given the same talent ELO inputs, it always produces the same probability distribution.
+        </p>
+      </Accordion>
+
+      <Accordion title="Input: Talent ELO Dimensions">
+        <p>
+          The predictor uses <strong>6 talent dimensions</strong> — 3 from the batter and 3 from the pitcher:
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Role</th>
+                <th className="px-3 py-2 text-left font-semibold">Dimension</th>
+                <th className="px-3 py-2 text-left font-semibold">What it captures</th>
+                <th className="px-3 py-2 text-left font-semibold">Used in</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2">Batter</td>
+                <td className="px-3 py-2 font-semibold">Discipline</td>
+                <td className="px-3 py-2">Plate discipline, walk rate</td>
+                <td className="px-3 py-2">Stage 1 (BB)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Batter</td>
+                <td className="px-3 py-2 font-semibold">Contact</td>
+                <td className="px-3 py-2">Ability to make contact, avoid strikeouts</td>
+                <td className="px-3 py-2">Stage 1 (K), Stage 2 (Hit)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Batter</td>
+                <td className="px-3 py-2 font-semibold">Power</td>
+                <td className="px-3 py-2">Extra-base hit and HR ability</td>
+                <td className="px-3 py-2">Stage 3 (XBH)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Pitcher</td>
+                <td className="px-3 py-2 font-semibold">Command</td>
+                <td className="px-3 py-2">Walk prevention, control</td>
+                <td className="px-3 py-2">Stage 1 (BB)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Pitcher</td>
+                <td className="px-3 py-2 font-semibold">Stuff</td>
+                <td className="px-3 py-2">Strikeout-inducing ability</td>
+                <td className="px-3 py-2">Stage 1 (K)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Pitcher</td>
+                <td className="px-3 py-2 font-semibold">BIP Suppression</td>
+                <td className="px-3 py-2">Batted-ball suppression (BABIP)</td>
+                <td className="px-3 py-2">Stage 2 (Hit)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-sm text-gray-500">
+          Clutch dimensions are not used in the predictor — the prediction models a
+          context-neutral plate appearance.
+        </p>
+      </Accordion>
+
+      <Accordion title="Z-Score Normalization">
+        <p>
+          Raw ELO values are on different scales across dimensions — Discipline ELOs
+          have a much wider spread (std ~139) than BIP Suppression (std ~18). Directly
+          comparing them would overweight some dimensions.
+        </p>
+        <p>
+          The predictor converts every ELO to a <strong>z-score</strong> using the
+          dimension-specific distribution from the 2025 season:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm mt-2">
+          z = (ELO &minus; mean) / std
+        </div>
+        <p className="mt-2">
+          After normalization, a z-score of +1.0 means "one standard deviation above average"
+          regardless of the dimension. A top-10% batter in Discipline and a top-10% pitcher
+          in Command produce the same z-magnitude, creating fair matchup comparisons.
+        </p>
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Dimension</th>
+                <th className="px-3 py-2 text-left font-semibold">Mean</th>
+                <th className="px-3 py-2 text-left font-semibold">Std Dev</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-mono">BATTER_CONTACT</td>
+                <td className="px-3 py-2">1504.5</td>
+                <td className="px-3 py-2">33.9</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">BATTER_POWER</td>
+                <td className="px-3 py-2">1468.6</td>
+                <td className="px-3 py-2">61.6</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">BATTER_DISCIPLINE</td>
+                <td className="px-3 py-2">1700.3</td>
+                <td className="px-3 py-2">139.0</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">PITCHER_STUFF</td>
+                <td className="px-3 py-2">1587.3</td>
+                <td className="px-3 py-2">56.6</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">PITCHER_BIP_SUPPRESSION</td>
+                <td className="px-3 py-2">1513.3</td>
+                <td className="px-3 py-2">18.2</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">PITCHER_COMMAND</td>
+                <td className="px-3 py-2">1681.1</td>
+                <td className="px-3 py-2">126.5</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-sm text-gray-500">
+          Values computed from 2025 MLB season talent_player_current table (673 batters, 873 pitchers).
+        </p>
+      </Accordion>
+
+      <Accordion title="The 3-Stage Decision Tree">
+        <p>
+          The prediction follows a <strong>sequential 3-stage decision tree</strong> that
+          mirrors the natural structure of a plate appearance:
+        </p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-2 overflow-x-auto mt-2">
+          <p className="font-bold">Stage 1: What happens? (3-way Softmax)</p>
+          <p>{'  '}P(BB), P(K), P(BIP) &larr; z(Discipline)-z(Command), z(Stuff)-z(Contact)</p>
+          <p className="font-bold mt-3">Stage 2: If ball in play, hit or out? (Logistic)</p>
+          <p>{'  '}P(Hit|BIP), P(Out|BIP) &larr; z(Contact)-z(BIP_Suppression)</p>
+          <p className="font-bold mt-3">Stage 3: If hit, single or extra-base? (Logistic)</p>
+          <p>{'  '}P(XBH|Hit), P(1B|Hit) &larr; z(Power)</p>
+          <p>{'  '}XBH &rarr; 2B/3B/HR split by league ratios</p>
+        </div>
+        <p className="mt-3">
+          This structure ensures probabilities are properly conditional and always sum to 100%.
+          Each stage narrows down from the previous one, producing a complete 7-outcome distribution.
+        </p>
+      </Accordion>
+
+      <Accordion title="Stage 1: BB / K / BIP (Softmax)">
+        <p>
+          Stage 1 determines the three top-level outcomes using a <strong>3-way softmax</strong> function.
+          The reference category is BIP (ball in play).
+        </p>
+        <p className="font-semibold mt-2">Z-score diffs:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            <strong>z_disc_cmd</strong> = z(Discipline) &minus; z(Command)
+            — positive means the batter has a discipline edge &rarr; more walks
+          </li>
+          <li>
+            <strong>z_stuff_contact</strong> = z(Stuff) &minus; z(Contact)
+            — positive means the pitcher has a stuff edge &rarr; more strikeouts
+          </li>
+        </ul>
+        <p className="font-semibold mt-3">Formula:</p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 overflow-x-auto">
+          <p>base_logit_BB = ln(league_bb_rate / league_bip_rate)</p>
+          <p>base_logit_K{'  '} = ln(league_k_rate / league_bip_rate)</p>
+          <p className="mt-2">logit_BB = base_logit_BB + z_disc_cmd / 3.5</p>
+          <p>logit_K{'  '} = base_logit_K + z_stuff_contact / 3.5</p>
+          <p className="mt-2">exp_BB = e^logit_BB, {'  '}exp_K = e^logit_K</p>
+          <p>Z = exp_BB + exp_K + 1.0</p>
+          <p className="mt-2">P(BB) = exp_BB / Z</p>
+          <p>P(K){'  '} = exp_K / Z</p>
+          <p>P(BIP) = 1.0 / Z</p>
+        </div>
+        <p className="mt-2">
+          The <strong>divisor of 3.5</strong> controls sensitivity: a z-diff of 3.5 (very extreme matchup)
+          shifts the logit by 1.0, which roughly doubles/halves the odds ratio. This keeps predictions
+          within realistic bounds even for extreme matchups.
+        </p>
+        <p className="mt-2">
+          At league average (z-diffs = 0), the softmax recovers the base rates:
+          BB ~9.5%, K ~22.2%, BIP ~68.3%.
+        </p>
+      </Accordion>
+
+      <Accordion title="Stage 2: Hit / Out given BIP (Logistic)">
+        <p>
+          Given the ball is in play, Stage 2 determines whether it's a hit or an out
+          using a <strong>base-rate logistic</strong> function.
+        </p>
+        <p className="font-semibold mt-2">Z-score diff:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            <strong>z_contact_bip</strong> = z(Contact) &minus; z(BIP_Suppression)
+            — positive means the batter has a contact edge &rarr; higher BABIP
+          </li>
+        </ul>
+        <p className="font-semibold mt-3">Formula:</p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 overflow-x-auto">
+          <p>base_logit = ln(BABIP / (1 &minus; BABIP))</p>
+          <p>logit = base_logit + z_contact_bip / 5.0</p>
+          <p>P(Hit|BIP) = 1 / (1 + e^(&minus;logit))</p>
+          <p className="mt-2">P(Hit) = P(BIP) &times; P(Hit|BIP)</p>
+          <p>P(Out) = P(BIP) &times; (1 &minus; P(Hit|BIP))</p>
+        </div>
+        <p className="mt-2">
+          The league average BABIP is <strong>.321</strong>. The divisor of 5.0 makes this stage
+          less sensitive than Stage 1, reflecting the high noise inherent in batted-ball outcomes
+          (consistent with DIPS theory).
+        </p>
+      </Accordion>
+
+      <Accordion title="Stage 3: XBH / Single given Hit (Logistic)">
+        <p>
+          Given a hit, Stage 3 determines whether it's a single or an extra-base hit.
+          This stage uses <strong>only the batter's Power z-score</strong> — the pitcher
+          has minimal control over hit quality once contact is made.
+        </p>
+        <p className="font-semibold mt-2">Z-score:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            <strong>z_power</strong> = z(Power)
+            — positive means above-average power &rarr; more extra-base hits
+          </li>
+        </ul>
+        <p className="font-semibold mt-3">Formula:</p>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm space-y-1 overflow-x-auto">
+          <p>base_logit = ln(xbh_rate / (1 &minus; xbh_rate))</p>
+          <p>logit = base_logit + z_power / 5.0</p>
+          <p>P(XBH|Hit) = 1 / (1 + e^(&minus;logit))</p>
+          <p className="mt-2">P(1B) = P(Hit) &times; (1 &minus; P(XBH|Hit))</p>
+          <p>P(XBH) = P(Hit) &times; P(XBH|Hit)</p>
+          <p className="mt-2 text-gray-500"># XBH split by league ratios:</p>
+          <p>P(2B) = P(XBH) &times; 0.552</p>
+          <p>P(3B) = P(XBH) &times; 0.045</p>
+          <p>P(HR) = P(XBH) &times; 0.403</p>
+        </div>
+        <p className="mt-2">
+          The XBH-to-hit ratio (2B/3B/HR split) uses fixed league averages because
+          the relative distribution of extra-base hit types is remarkably stable across
+          player skill levels.
+        </p>
+      </Accordion>
+
+      <Accordion title="League Average Base Rates (2025 MLB)">
+        <p>
+          All base rates are computed from 183,092 plate appearances in the 2025 MLB season:
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Rate</th>
+                <th className="px-3 py-2 text-left font-semibold">Value</th>
+                <th className="px-3 py-2 text-left font-semibold">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2 font-mono">bb_rate</td>
+                <td className="px-3 py-2">9.49%</td>
+                <td className="px-3 py-2">Walk rate (BB + IBB + HBP)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">k_rate</td>
+                <td className="px-3 py-2">22.18%</td>
+                <td className="px-3 py-2">Strikeout rate</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">bip_rate</td>
+                <td className="px-3 py-2">68.34%</td>
+                <td className="px-3 py-2">Ball in play rate (1 &minus; BB &minus; K)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">BABIP</td>
+                <td className="px-3 py-2">.321</td>
+                <td className="px-3 py-2">Hit rate on balls in play</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">xbh_rate</td>
+                <td className="px-3 py-2">34.93%</td>
+                <td className="px-3 py-2">Extra-base hit rate given any hit</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">2B ratio</td>
+                <td className="px-3 py-2">55.2%</td>
+                <td className="px-3 py-2">Doubles as % of XBH</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">3B ratio</td>
+                <td className="px-3 py-2">4.5%</td>
+                <td className="px-3 py-2">Triples as % of XBH</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono">HR ratio</td>
+                <td className="px-3 py-2">40.3%</td>
+                <td className="px-3 py-2">Home runs as % of XBH</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Accordion>
+
+      <Accordion title="Output: Expected wOBA and Derived Stats">
+        <p>
+          The 7-outcome distribution is converted to <strong>expected wOBA</strong> using
+          standard linear weights:
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Outcome</th>
+                <th className="px-3 py-2 text-left font-semibold">wOBA Weight</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2">BB</td>
+                <td className="px-3 py-2">0.69</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">K / OUT</td>
+                <td className="px-3 py-2">0.00</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">1B</td>
+                <td className="px-3 py-2">0.88</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">2B</td>
+                <td className="px-3 py-2">1.24</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">3B</td>
+                <td className="px-3 py-2">1.56</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">HR</td>
+                <td className="px-3 py-2">2.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-4 font-mono text-sm mt-3">
+          expected_wOBA = &Sigma; P(outcome) &times; wOBA_weight(outcome)
+        </div>
+        <p className="mt-2">Additional derived statistics:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><strong>On-Base %</strong> = P(BB) + P(1B) + P(2B) + P(3B) + P(HR)</li>
+          <li><strong>xSLG</strong> = P(1B)&times;1 + P(2B)&times;2 + P(3B)&times;3 + P(HR)&times;4 (expected total bases per PA)</li>
+        </ul>
+        <p className="mt-2">
+          The "<strong>vs avg</strong>" indicator shows how the predicted wOBA compares to the league
+          average wOBA (computed from base rates). Positive values favor the batter; negative values
+          favor the pitcher.
+        </p>
+      </Accordion>
+
+      <Accordion title="Sensitivity & Divisor Constants">
+        <p>
+          The <strong>divisor constants</strong> control how strongly z-score differences shift
+          probabilities away from base rates. Smaller divisors = more sensitive:
+        </p>
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-3 py-2 text-left font-semibold">Stage</th>
+                <th className="px-3 py-2 text-left font-semibold">Divisor</th>
+                <th className="px-3 py-2 text-left font-semibold">Rationale</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              <tr>
+                <td className="px-3 py-2">Stage 1 (BB)</td>
+                <td className="px-3 py-2 font-mono">3.5</td>
+                <td className="px-3 py-2">Moderate — walks are a controlled outcome</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Stage 1 (K)</td>
+                <td className="px-3 py-2 font-mono">3.5</td>
+                <td className="px-3 py-2">Moderate — strikeouts are a controlled outcome</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Stage 2 (Hit|BIP)</td>
+                <td className="px-3 py-2 font-mono">5.0</td>
+                <td className="px-3 py-2">Low sensitivity — BABIP is noisy (DIPS theory)</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2">Stage 3 (XBH|Hit)</td>
+                <td className="px-3 py-2 font-mono">5.0</td>
+                <td className="px-3 py-2">Low sensitivity — hit type depends heavily on luck</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2">
+          With these divisors, a z-diff of ±2.0 (roughly top-5% vs bottom-5%) shifts a logit
+          by ±0.57 for Stage 1, or ±0.40 for Stages 2-3. This means even extreme matchups
+          stay within realistic outcome ranges — a great hitter facing a weak pitcher still
+          strikes out sometimes.
+        </p>
+      </Accordion>
+
+      <Accordion title="Interpreting the Results">
+        <p>Here's how to read the Matchup Predictor output:</p>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>
+            <strong>Expected wOBA</strong> is the single best summary stat. League average
+            is around .310. Above .350 is a strong batter advantage; below .280 favors the pitcher.
+          </li>
+          <li>
+            <strong>The outcome bar</strong> shows how the 100% probability mass is distributed.
+            Look for unusually large blue (BB) or red (K) segments to see where the matchup is
+            most lopsided.
+          </li>
+          <li>
+            <strong>Stage cards</strong> show exactly which skill matchups drive the prediction.
+            The z-score diffs tell you <em>why</em> — e.g., "Disc-Cmd +1.2" means the batter has
+            a 1.2 standard deviation discipline advantage, leading to elevated walk probability.
+          </li>
+          <li>
+            <strong>Average vs. average</strong> should recover league base rates (BB ~9.5%, K ~22%).
+            If it doesn't, there's a calibration issue.
+          </li>
+          <li>
+            The model is <strong>context-neutral</strong> — it doesn't account for base-out state,
+            game leverage, platoon splits (L/R), or park factors. It models a "generic" PA between
+            the two players.
+          </li>
+        </ul>
+      </Accordion>
+
+      <Accordion title="Limitations">
+        <ul className="list-disc pl-5 space-y-2">
+          <li>
+            <strong>No platoon splits</strong> — The model doesn't distinguish left-handed vs
+            right-handed matchups, which significantly affect real outcomes.
+          </li>
+          <li>
+            <strong>No situational context</strong> — Base-out state, inning, score, and game
+            leverage are not modeled.
+          </li>
+          <li>
+            <strong>Static talent ELO</strong> — The prediction uses current season-end talent
+            ratings. It doesn't account for recent form, fatigue, or injury.
+          </li>
+          <li>
+            <strong>No batted-ball quality</strong> — Stage 2 uses aggregate BABIP adjustment but
+            doesn't model launch angle, exit velocity, or spray direction.
+          </li>
+          <li>
+            <strong>Fixed XBH split</strong> — The 2B/3B/HR distribution uses league averages
+            rather than player-specific power profiles.
+          </li>
+          <li>
+            <strong>Calibration assumes normality</strong> — Z-score normalization works well
+            for dimensions with bell-shaped distributions but may distort dimensions with
+            skewed or heavy-tailed ELO distributions.
+          </li>
+        </ul>
+      </Accordion>
+    </div>
+  );
+}
+
 function DeveloperTab() {
   return (
     <div className="space-y-4">
@@ -1039,6 +1544,17 @@ export default function Guide() {
           Talent ELO
         </button>
         <button
+          onClick={() => setActiveTab('matchup')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
+            activeTab === 'matchup'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <Crosshair className="w-4 h-4" />
+          Matchup Engine
+        </button>
+        <button
           onClick={() => setActiveTab('developer')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition-all ${
             activeTab === 'developer'
@@ -1053,7 +1569,7 @@ export default function Guide() {
 
       {/* Tab Content */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        {activeTab === 'overview' ? <OverviewTab /> : activeTab === 'general' ? <GeneralTab /> : activeTab === 'talent' ? <TalentTab /> : <DeveloperTab />}
+        {activeTab === 'overview' ? <OverviewTab /> : activeTab === 'general' ? <GeneralTab /> : activeTab === 'talent' ? <TalentTab /> : activeTab === 'matchup' ? <MatchupEngineTab /> : <DeveloperTab />}
       </div>
     </div>
   );

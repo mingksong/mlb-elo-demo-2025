@@ -6,6 +6,7 @@ import Leaderboard from './pages/Leaderboard';
 import PlayerProfile from './pages/PlayerProfile';
 import Guide from './pages/Guide';
 import TalentLeaderboard from './pages/TalentLeaderboard';
+import Matchup from './pages/Matchup';
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ function App() {
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/talent-leaderboard" element={<TalentLeaderboard />} />
             <Route path="/player/:playerId" element={<PlayerProfile />} />
+            <Route path="/matchup" element={<Matchup />} />
             <Route path="/guide" element={<Guide />} />
           </Routes>
         </Layout>
