@@ -6,7 +6,7 @@ import tempfile
 import pandas as pd
 import pytest
 
-from src.engine.elo_config import INITIAL_ELO, K_FACTOR, ADJUSTMENT_SCALE
+from src.engine.elo_config import INITIAL_ELO, K_FACTOR, ADJUSTMENT_SCALE, EVENT_K_FACTORS
 from src.engine.elo_calculator import PlayerEloState, EloCalculator
 from src.engine.elo_batch import EloBatch
 from src.engine.re24_baseline import RE24Baseline
@@ -256,7 +256,7 @@ def test_field_error_caps_batter_delta():
 
 
 def test_field_error_negative_rv_unchanged():
-    """E result_type + 음의 RV → 정상 처리 (타자에게 불리한 결과는 유지)."""
+    """E result_type → K_base=0.0이므로 delta=0 (K-Modulation: 에러는 실력 무관)."""
     calc = EloCalculator()
     batter = PlayerEloState(player_id=1)
     pitcher = PlayerEloState(player_id=2)
@@ -265,10 +265,9 @@ def test_field_error_negative_rv_unchanged():
         batter, pitcher, delta_run_exp=-0.3, result_type='E'
     )
 
-    # 음의 delta → cap 적용 안됨
-    expected_delta = K_FACTOR * (-0.3)
-    assert result.batter_delta == pytest.approx(expected_delta)
-    assert result.pitcher_delta == pytest.approx(-expected_delta)
+    # E has K_base=0.0 → delta = 0 regardless of rv
+    assert result.batter_delta == 0.0
+    assert result.pitcher_delta == 0.0
 
 
 def test_field_error_cumulative_rv_still_tracked():
@@ -340,7 +339,8 @@ def test_backward_compat_batch_no_extra_columns():
     batch = EloBatch()
     batch.process(pa_df)
 
-    expected_delta = K_FACTOR * 0.45
+    # K-Modulation: Single K_base=10.0, no xwoba → modifier=1.0
+    expected_delta = EVENT_K_FACTORS['Single'] * 0.45
     assert batch.players[100].batting_elo == pytest.approx(INITIAL_ELO + expected_delta)
 
 
@@ -367,5 +367,6 @@ def test_batch_with_upgrade_columns():
         # State 0 (empty 0out), COL (adj=0.013), mean_rv=-0.002
         # adjusted = 0.45 - 0.013 = 0.437
         # rv_diff = 0.437 - (-0.002) = 0.439
-        expected_delta = K_FACTOR * (0.45 - 0.013 - (-0.002))
+        # K-Modulation: Single K_base=10.0, no xwoba → modifier=1.0
+        expected_delta = EVENT_K_FACTORS['Single'] * (0.45 - 0.013 - (-0.002))
         assert batch.players[100].batting_elo == pytest.approx(INITIAL_ELO + expected_delta)

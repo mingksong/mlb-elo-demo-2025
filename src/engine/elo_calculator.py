@@ -1,28 +1,42 @@
 """
-V5.3 ELO Calculator (MLB 포팅)
+V5.3 ELO Calculator (MLB 포팅) + K-Modulation (Hybrid A1+C2)
 
 KBO V5.3 Zero-Sum ELO Engine의 MLB 포팅.
-delta_run_exp(Run Expectancy 변화량)를 사용한 단일 차원 ELO.
+Phase 1: xwOBA 기반 K-Modulation 추가.
 
-핵심 공식 (V5.3 Full):
+핵심 공식 (K-Modulation):
   adjusted_rv  = delta_run_exp - park_adjustment
   rv_diff      = adjusted_rv - mean_rv[state]
-  batter_delta = K × rv_diff
-  pitcher_delta = -K × rv_diff  (Zero-Sum)
+  K_base       = EVENT_K_FACTORS[result_type]
+  modifier     = physics_modifier(result_type, xwoba)
+  K_effective  = K_base × modifier
+  batter_delta = K_effective × rv_diff
+  pitcher_delta = -batter_delta  (Zero-Sum)
 
 Key Features:
   - True Zero-Sum: batter_delta = -pitcher_delta
+  - Layer 1 (C2): Event-type K-factor table
+  - Layer 2 (A1): xwOBA-based physics modifier [0.7, 1.3]
   - State normalization: base-out state별 기대 RV 보정
   - Park factor: 구장별 scoring environment 보정
   - Field error handling: 에러 시 타자 유리한 ELO 변동 차단
-  - K=12.0 for stable daily volatility
   - MIN_ELO=500 (하한선)
 """
 
 from dataclasses import dataclass
 from typing import Optional
 
-from src.engine.elo_config import INITIAL_ELO, MIN_ELO, K_FACTOR
+from src.engine.elo_config import (
+    EVENT_K_FACTORS,
+    INITIAL_ELO,
+    K_FACTOR,
+    LEAGUE_AVG_XWOBA,
+    MIN_ELO,
+    NON_BIP_TYPES,
+    PHYSICS_ALPHA,
+    PHYSICS_MOD_MAX,
+    PHYSICS_MOD_MIN,
+)
 
 
 @dataclass
@@ -58,6 +72,26 @@ class PlayerEloState:
         self.pitching_elo = max(MIN_ELO, self.pitching_elo + delta)
 
 
+def calculate_physics_modifier(
+    result_type: Optional[str],
+    xwoba: Optional[float],
+) -> float:
+    """BIP 이벤트의 물리 품질에 따라 K-factor modifier 반환.
+
+    - Non-BIP (K, BB, HBP 등): modifier = 1.0
+    - BIP (hit, out, etc.): xwOBA 기반 modifier [0.7, 1.3]
+    """
+    if result_type is None or result_type in NON_BIP_TYPES:
+        return 1.0
+
+    if xwoba is None:
+        return 1.0
+
+    deviation = xwoba - LEAGUE_AVG_XWOBA
+    modifier = 1.0 + PHYSICS_ALPHA * (deviation / LEAGUE_AVG_XWOBA)
+    return max(PHYSICS_MOD_MIN, min(PHYSICS_MOD_MAX, modifier))
+
+
 @dataclass
 class EloUpdateResult:
     """타석 ELO 업데이트 결과."""
@@ -67,6 +101,9 @@ class EloUpdateResult:
     batter_elo_after: float
     pitcher_elo_before: float
     pitcher_elo_after: float
+    k_base: float = 0.0
+    physics_mod: float = 1.0
+    k_effective: float = 0.0
 
 
 class EloCalculator:
@@ -86,9 +123,10 @@ class EloCalculator:
         state: int = 0,
         home_team: Optional[str] = None,
         result_type: Optional[str] = None,
+        xwoba: Optional[float] = None,
     ) -> EloUpdateResult:
         """
-        타석 결과 처리.
+        타석 결과 처리 (K-Modulation 적용).
 
         Args:
             batter: 타자 ELO 상태
@@ -97,12 +135,18 @@ class EloCalculator:
             state: base-out state (0~23)
             home_team: 홈팀 약칭 (park factor용)
             result_type: 결과 타입 ('E' 등 field error 감지용)
+            xwoba: expected wOBA (physics modifier용, None이면 modifier=1.0)
 
         Returns:
             EloUpdateResult
         """
         batter_elo_before = batter.batting_elo
         pitcher_elo_before = pitcher.pitching_elo
+
+        # K-Modulation: Layer 1 (event K) × Layer 2 (physics modifier)
+        k_base = EVENT_K_FACTORS.get(result_type, self.k_factor) if result_type else self.k_factor
+        physics_mod = calculate_physics_modifier(result_type, xwoba)
+        k_effective = k_base * physics_mod
 
         if delta_run_exp is not None:
             # Step 1: Park factor adjustment
@@ -118,8 +162,8 @@ class EloCalculator:
             else:
                 rv_diff = adjusted_rv
 
-            # Step 3: ELO delta
-            batter_delta = self.k_factor * rv_diff
+            # Step 3: ELO delta (K-Modulation)
+            batter_delta = k_effective * rv_diff
             pitcher_delta = -batter_delta
 
             # Step 4: Field error handling
@@ -148,4 +192,7 @@ class EloCalculator:
             batter_elo_after=batter.batting_elo,
             pitcher_elo_before=pitcher_elo_before,
             pitcher_elo_after=pitcher.pitching_elo,
+            k_base=k_base,
+            physics_mod=physics_mod,
+            k_effective=k_effective,
         )

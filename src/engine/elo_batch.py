@@ -159,12 +159,18 @@ class EloBatch:
             home_team = row.get('home_team')
             result_type = row.get('result_type')
 
-            # ELO 계산
+            # xwoba (NaN → None, 컬럼 없으면 None)
+            xwoba_val = row.get('xwoba')
+            if xwoba_val is not None and pd.isna(xwoba_val):
+                xwoba_val = None
+
+            # ELO 계산 (K-Modulation)
             result = self.calc.process_plate_appearance(
                 batter, pitcher, rv,
                 state=state,
                 home_team=home_team,
                 result_type=result_type,
+                xwoba=xwoba_val,
             )
 
             # OHLC update (타석 후, role별)
@@ -182,6 +188,9 @@ class EloBatch:
                 'pitcher_elo_before': result.pitcher_elo_before,
                 'pitcher_elo_after': result.pitcher_elo_after,
                 'elo_delta': result.batter_delta,
+                'k_base': result.k_base,
+                'physics_mod': result.physics_mod,
+                'k_effective': result.k_effective,
             })
 
             if (idx + 1) % 50000 == 0:
