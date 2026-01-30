@@ -358,7 +358,8 @@ def run_daily_pipeline(target_date: date = None, force: bool = False) -> dict:
     # 8c. daily_ohlc
     logger.info("  Uploading daily_ohlc...")
     ohlc_records = _prepare_ohlc_records(batch.daily_ohlc)
-    ohlc_uploaded = upload_table(client, 'daily_ohlc', ohlc_records)
+    ohlc_uploaded = upload_table(client, 'daily_ohlc', ohlc_records,
+                                 on_conflict='player_id,game_date,elo_type,role')
 
     # 9. Talent ELO (incremental 9D)
     logger.info("  Running incremental Talent ELO calculation...")
@@ -374,12 +375,14 @@ def run_daily_pipeline(target_date: date = None, force: bool = False) -> dict:
     # 9b. talent_pa_detail
     logger.info("  Uploading talent_pa_detail...")
     talent_detail_records = _prepare_talent_pa_detail_records(talent_batch.talent_pa_details)
-    talent_detail_uploaded = upload_table(client, 'talent_pa_detail', talent_detail_records)
+    talent_detail_uploaded = upload_table(client, 'talent_pa_detail', talent_detail_records,
+                                          on_conflict='pa_id,player_id,talent_type')
 
     # 9c. talent_daily_ohlc
     logger.info("  Uploading talent_daily_ohlc...")
     talent_ohlc_records = _prepare_talent_ohlc_records(talent_batch.talent_daily_ohlc)
-    talent_ohlc_uploaded = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records)
+    talent_ohlc_uploaded = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records,
+                                        on_conflict='player_id,game_date,talent_type,elo_type')
 
     result = {
         'status': 'success',

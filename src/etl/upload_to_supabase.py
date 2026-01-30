@@ -45,13 +45,21 @@ def prepare_pa_records(pa_df: pd.DataFrame) -> list[dict]:
     return records
 
 
-def upload_table(client, table_name: str, records: list[dict], batch_size: int = 1000) -> int:
-    """Supabase 테이블에 batch upsert."""
+def upload_table(client, table_name: str, records: list[dict], batch_size: int = 1000,
+                 on_conflict: str | None = None) -> int:
+    """Supabase 테이블에 batch upsert.
+
+    Args:
+        on_conflict: UNIQUE constraint columns for conflict resolution
+                     (e.g. 'player_id,game_date,elo_type,role').
+                     Required for tables with SERIAL PK + separate UNIQUE constraint.
+    """
     uploaded = 0
     total = len(records)
     for i in range(0, total, batch_size):
         batch = records[i:i + batch_size]
-        client.table(table_name).upsert(batch).execute()
+        q = client.table(table_name).upsert(batch, on_conflict=on_conflict) if on_conflict else client.table(table_name).upsert(batch)
+        q.execute()
         uploaded += len(batch)
         if uploaded % 5000 == 0 or uploaded == total:
             logger.info(f"  {table_name}: {uploaded:,} / {total:,}")

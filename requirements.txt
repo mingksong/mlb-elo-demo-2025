@@ -4,3 +4,4 @@ supabase>=2.0
 python-dotenv>=1.0
 requests>=2.31
 pytest>=8.0
+PyYAML>=6.0

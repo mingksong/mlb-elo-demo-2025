@@ -219,7 +219,8 @@ def main():
     # 5c. daily_ohlc
     print("\n--- daily_ohlc ---")
     ohlc_records = prepare_ohlc_records(batch.daily_ohlc)
-    n = upload_table(client, 'daily_ohlc', ohlc_records, batch_size=1000)
+    n = upload_table(client, 'daily_ohlc', ohlc_records, batch_size=1000,
+                     on_conflict='player_id,game_date,elo_type,role')
     print(f"  Uploaded: {n:,}")
 
     # 5d. talent_player_current
@@ -237,7 +238,8 @@ def main():
         'elo_before': round(d['elo_before'], 4),
         'elo_after': round(d['elo_after'], 4),
     } for d in talent_batch.talent_pa_details]
-    n = upload_table(client, 'talent_pa_detail', talent_pa_records, batch_size=1000)
+    n = upload_table(client, 'talent_pa_detail', talent_pa_records, batch_size=1000,
+                     on_conflict='pa_id,player_id,talent_type')
     print(f"  Uploaded: {n:,}")
 
     # 5f. talent_daily_ohlc
@@ -253,7 +255,8 @@ def main():
         'close_elo': round(o['close'], 4),
         'total_pa': o['total_pa'],
     } for o in talent_batch.talent_daily_ohlc]
-    n = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records, batch_size=1000)
+    n = upload_table(client, 'talent_daily_ohlc', talent_ohlc_records, batch_size=1000,
+                     on_conflict='player_id,game_date,talent_type,elo_type')
     print(f"  Uploaded: {n:,}")
 
     # 6. Verify
