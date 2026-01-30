@@ -36,6 +36,16 @@ export default function Header() {
             Leaderboard
           </Link>
           <Link
+            to="/talent-leaderboard"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              location.pathname === '/talent-leaderboard'
+                ? 'bg-primary text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Talent
+          </Link>
+          <Link
             to="/guide"
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
               location.pathname === '/guide'
