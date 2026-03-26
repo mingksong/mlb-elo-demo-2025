@@ -152,7 +152,6 @@ def _prepare_talent_pa_detail_records(details: list[dict]) -> list[dict]:
             'talent_type': d['talent_type'],
             'elo_before': round(float(d['elo_before']), 4),
             'elo_after': round(float(d['elo_after']), 4),
-            'delta': round(float(d['delta']), 4),
         })
     return records
 
