@@ -4,6 +4,7 @@ Regular Season (game_type == 'R') 데이터만 수집.
 """
 
 import logging
+import time
 from datetime import date, timedelta
 
 import pandas as pd
@@ -11,10 +12,36 @@ from pybaseball import statcast
 
 logger = logging.getLogger(__name__)
 
+FETCH_MAX_RETRIES = 3
+FETCH_RETRY_DELAY = 10  # seconds
+
 
 def get_yesterday() -> date:
     """어제 날짜 반환."""
     return date.today() - timedelta(days=1)
+
+
+def _fetch_with_retry(date_str: str, max_retries: int = FETCH_MAX_RETRIES) -> pd.DataFrame:
+    """pybaseball statcast 호출 + 재시도. 일시적 API 실패 방지."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            df = statcast(start_dt=date_str, end_dt=date_str)
+            if df is not None and not df.empty:
+                return df
+            if attempt < max_retries:
+                logger.info(f"  Attempt {attempt}/{max_retries}: empty response, retrying in {FETCH_RETRY_DELAY}s...")
+                time.sleep(FETCH_RETRY_DELAY)
+            else:
+                logger.info(f"  All {max_retries} attempts returned empty data")
+                return pd.DataFrame()
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"  Attempt {attempt}/{max_retries} failed: {e}, retrying in {FETCH_RETRY_DELAY}s...")
+                time.sleep(FETCH_RETRY_DELAY)
+            else:
+                logger.error(f"  All {max_retries} attempts failed. Last error: {e}")
+                raise
+    return pd.DataFrame()
 
 
 def fetch_statcast_date(target_date: date) -> pd.DataFrame:
@@ -29,16 +56,19 @@ def fetch_statcast_date(target_date: date) -> pd.DataFrame:
     date_str = target_date.strftime('%Y-%m-%d')
     logger.info(f"Fetching Statcast data for {date_str}...")
 
-    df = statcast(start_dt=date_str, end_dt=date_str)
+    df = _fetch_with_retry(date_str)
 
-    if df is None or df.empty:
-        logger.info(f"  No data for {date_str}")
+    if df.empty:
+        logger.info(f"  No Statcast data for {date_str} (no games or data not yet available)")
         return pd.DataFrame()
 
     # Regular Season 필터 (game_type == 'R')
     if 'game_type' in df.columns:
+        total = len(df)
+        game_types = df['game_type'].value_counts().to_dict()
+        logger.info(f"  Total pitches: {total:,}, game types: {game_types}")
         df = df[df['game_type'] == 'R']
-        logger.info(f"  Regular season filter: {len(df):,} pitches")
+        logger.info(f"  Regular season filter: {len(df):,} / {total:,} pitches")
     else:
         logger.warning(f"  No game_type column — returning all {len(df):,} pitches")
 
