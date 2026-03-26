@@ -66,8 +66,10 @@ class TestDetectNewPlayerIds:
 
 
 class TestFetchPlayerFromMlbApi:
+    @patch('src.etl.player_registry._get_team_map')
     @patch('src.etl.player_registry.requests.get')
-    def test_successful_fetch(self, mock_get):
+    def test_successful_fetch(self, mock_get, mock_team_map):
+        mock_team_map.return_value = {108: 'LAA'}
         mock_get.return_value.status_code = 200
         mock_get.return_value.raise_for_status = MagicMock()
         mock_get.return_value.json.return_value = {
@@ -75,7 +77,7 @@ class TestFetchPlayerFromMlbApi:
                 'firstName': 'Mike',
                 'lastName': 'Trout',
                 'fullName': 'Mike Trout',
-                'currentTeam': {'abbreviation': 'LAA'},
+                'currentTeam': {'id': 108, 'name': 'Los Angeles Angels'},
                 'primaryPosition': {'abbreviation': 'CF'},
             }]
         }
@@ -108,9 +110,11 @@ class TestFetchPlayerFromMlbApi:
         result = fetch_player_from_mlb_api(999999)
         assert result is None
 
+    @patch('src.etl.player_registry._get_team_map')
     @patch('src.etl.player_registry.requests.get')
-    def test_missing_optional_fields(self, mock_get):
+    def test_missing_optional_fields(self, mock_get, mock_team_map):
         """currentTeam, primaryPosition 없어도 동작."""
+        mock_team_map.return_value = {}
         mock_get.return_value.raise_for_status = MagicMock()
         mock_get.return_value.json.return_value = {
             'people': [{

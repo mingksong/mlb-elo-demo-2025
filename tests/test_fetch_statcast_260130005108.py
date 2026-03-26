@@ -28,7 +28,8 @@ class TestFetchStatcastDate:
     def test_calls_pybaseball_with_correct_date(self, mock_statcast):
         mock_statcast.return_value = pd.DataFrame()
         fetch_statcast_date(date(2026, 4, 15))
-        mock_statcast.assert_called_once_with(
+        # _fetch_with_retry retries on empty, so statcast may be called multiple times
+        mock_statcast.assert_called_with(
             start_dt='2026-04-15', end_dt='2026-04-15'
         )
 
