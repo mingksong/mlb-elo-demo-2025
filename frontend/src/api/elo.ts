@@ -63,6 +63,7 @@ export interface LeaderboardParams {
   position?: string;
   page?: number;
   limit?: number;
+  season?: number;
 }
 
 export interface LeaderboardPlayer {
@@ -80,7 +81,7 @@ export interface LeaderboardPlayer {
 }
 
 export async function getLeaderboard(params: LeaderboardParams): Promise<LeaderboardPlayer[]> {
-  const { position, page = 1, limit = 20 } = params;
+  const { position, page = 1, limit = 20, season } = params;
   const offset = (page - 1) * limit;
 
   // Sort by role-appropriate ELO
@@ -94,6 +95,12 @@ export async function getLeaderboard(params: LeaderboardParams): Promise<Leaderb
     .gt(paColumn, 0)
     .order(sortColumn, { ascending: false })
     .range(offset, offset + limit - 1);
+
+  if (season) {
+    query = query
+      .gte('last_game_date', `${season}-01-01`)
+      .lte('last_game_date', `${season}-12-31`);
+  }
 
   const { data, error } = await query;
 
@@ -275,7 +282,25 @@ export async function getSeasonMeta(): Promise<SeasonMeta> {
 
   const startDate = earliest.data?.[0]?.game_date ?? '';
   const endDate = latest.data?.[0]?.game_date ?? '';
-  const year = startDate ? new Date(startDate).getFullYear() : new Date().getFullYear();
+  const year = endDate ? new Date(endDate).getFullYear() : new Date().getFullYear();
 
   return { year, startDate, endDate };
+}
+
+export async function getAvailableSeasons(): Promise<number[]> {
+  const [earliest, latest] = await Promise.all([
+    supabase.from('daily_ohlc').select('game_date').order('game_date').limit(1),
+    supabase.from('daily_ohlc').select('game_date').order('game_date', { ascending: false }).limit(1),
+  ]);
+
+  const startYear = earliest.data?.[0]?.game_date
+    ? new Date(earliest.data[0].game_date).getFullYear()
+    : new Date().getFullYear();
+  const endYear = latest.data?.[0]?.game_date
+    ? new Date(latest.data[0].game_date).getFullYear()
+    : new Date().getFullYear();
+
+  const years: number[] = [];
+  for (let y = endYear; y >= startYear; y--) years.push(y);
+  return years;
 }

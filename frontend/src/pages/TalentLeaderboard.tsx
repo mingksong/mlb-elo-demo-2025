@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTalentLeaderboard } from '../hooks/useTalent';
-import { useSeasonMeta } from '../hooks/useElo';
+import { useAvailableSeasons } from '../hooks/useElo';
 import TalentLeaderboardTable from '../components/talent/TalentLeaderboardTable';
 import { ALL_TALENTS, BATTER_TALENTS, PITCHER_TALENTS } from '../types/talent';
 import type { TalentMeta } from '../types/talent';
@@ -19,21 +19,28 @@ export default function TalentLeaderboard() {
 
   const [activeTab, setActiveTab] = useState<TalentMeta>(initialTab);
   const [page, setPage] = useState(1);
+  const [season, setSeason] = useState<number>(new Date().getFullYear());
   const limit = 20;
 
+  const { data: seasons = [] } = useAvailableSeasons();
   const { data: players = [], isLoading } = useTalentLeaderboard({
     talentType: activeTab.dbType,
     playerRole: activeTab.role,
     page,
     limit,
+    season,
   });
 
-  const { data: seasonMeta } = useSeasonMeta();
+  useEffect(() => {
+    if (seasons.length > 0 && !seasons.includes(season)) {
+      setSeason(seasons[0]);
+    }
+  }, [seasons, season]);
 
   useEffect(() => {
     setPage(1);
     setSearchParams({ type: activeTab.type }, { replace: true });
-  }, [activeTab, setSearchParams]);
+  }, [activeTab, setSearchParams, season]);
 
   const isLastPage = players.length < limit;
   const estimatedTotalPages = Math.ceil((ESTIMATED_TOTAL[activeTab.role] || 500) / limit);
@@ -55,9 +62,15 @@ export default function TalentLeaderboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Talent Leaderboard</h2>
-        <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-          {seasonMeta?.year ?? ''} Season
-        </span>
+        <select
+          value={season}
+          onChange={(e) => setSeason(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold bg-white text-primary cursor-pointer hover:border-primary/40 transition-colors"
+        >
+          {seasons.map((y) => (
+            <option key={y} value={y}>{y} Season</option>
+          ))}
+        </select>
       </div>
 
       {/* Dimension Tabs */}

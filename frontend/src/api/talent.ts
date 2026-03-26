@@ -30,20 +30,32 @@ export interface TalentLeaderboardParams {
   playerRole: string;
   page?: number;
   limit?: number;
+  season?: number;
 }
 
 export async function getTalentLeaderboard(params: TalentLeaderboardParams): Promise<TalentLeaderboardPlayer[]> {
-  const { talentType, playerRole, page = 1, limit = 20 } = params;
+  const { talentType, playerRole, page = 1, limit = 20, season } = params;
   const offset = (page - 1) * limit;
 
-  const { data, error } = await supabase
+  const selectFields = season
+    ? 'player_id, season_elo, career_elo, pa_count, players!inner(full_name, team, position, player_elo!inner(last_game_date))'
+    : 'player_id, season_elo, career_elo, pa_count, players!inner(full_name, team, position)';
+
+  let query = supabase
     .from('talent_player_current')
-    .select('player_id, season_elo, career_elo, pa_count, players!inner(full_name, team, position)')
+    .select(selectFields)
     .eq('talent_type', talentType)
     .eq('player_role', playerRole)
     .order('season_elo', { ascending: false })
     .range(offset, offset + limit - 1);
 
+  if (season) {
+    query = query
+      .gte('players.player_elo.last_game_date', `${season}-01-01`)
+      .lte('players.player_elo.last_game_date', `${season}-12-31`);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
   return (data ?? []).map((row: Record<string, unknown>) => {

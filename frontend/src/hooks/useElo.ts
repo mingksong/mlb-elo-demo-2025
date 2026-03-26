@@ -81,3 +81,11 @@ export function useSeasonMeta() {
     staleTime: 300_000,
   });
 }
+
+export function useAvailableSeasons() {
+  return useQuery({
+    queryKey: ['availableSeasons'],
+    queryFn: () => eloApi.getAvailableSeasons(),
+    staleTime: 300_000,
+  });
+}

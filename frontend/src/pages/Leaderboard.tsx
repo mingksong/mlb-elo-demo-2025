@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useLeaderboard, useSeasonMeta } from '../hooks/useElo';
+import { useLeaderboard, useAvailableSeasons } from '../hooks/useElo';
 import LeaderboardTable from '../components/leaderboard/LeaderboardTable';
 
 type PositionTab = 'batter' | 'pitcher';
@@ -10,14 +10,21 @@ const ESTIMATED_TOTAL = { pitcher: 580, batter: 540 };
 export default function Leaderboard() {
   const [position, setPosition] = useState<PositionTab>('batter');
   const [page, setPage] = useState(1);
+  const [season, setSeason] = useState<number>(new Date().getFullYear());
   const limit = 20;
 
-  const { data: players = [], isLoading } = useLeaderboard({ position, page, limit });
-  const { data: seasonMeta } = useSeasonMeta();
+  const { data: seasons = [] } = useAvailableSeasons();
+  const { data: players = [], isLoading } = useLeaderboard({ position, page, limit, season });
+
+  useEffect(() => {
+    if (seasons.length > 0 && !seasons.includes(season)) {
+      setSeason(seasons[0]);
+    }
+  }, [seasons, season]);
 
   useEffect(() => {
     setPage(1);
-  }, [position]);
+  }, [position, season]);
 
   const isLastPage = players.length < limit;
   const estimatedTotalPages = Math.ceil(ESTIMATED_TOTAL[position] / limit);
@@ -39,9 +46,15 @@ export default function Leaderboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Leaderboard</h2>
-        <span className="text-xs font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-          {seasonMeta?.year ?? ''} Season
-        </span>
+        <select
+          value={season}
+          onChange={(e) => setSeason(Number(e.target.value))}
+          className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold bg-white text-primary cursor-pointer hover:border-primary/40 transition-colors"
+        >
+          {seasons.map((y) => (
+            <option key={y} value={y}>{y} Season</option>
+          ))}
+        </select>
       </div>
 
       {/* Position Tabs */}
