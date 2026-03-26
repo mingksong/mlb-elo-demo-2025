@@ -13,6 +13,23 @@ logger = logging.getLogger(__name__)
 
 MLB_API_BASE = "https://statsapi.mlb.com/api/v1"
 
+# Team ID → abbreviation cache (loaded once per pipeline run)
+_TEAM_MAP: dict[int, str] = {}
+
+
+def _get_team_map() -> dict[int, str]:
+    """Load MLB team ID → abbreviation mapping (cached)."""
+    global _TEAM_MAP
+    if not _TEAM_MAP:
+        try:
+            resp = requests.get(f"{MLB_API_BASE}/teams", params={"sportId": 1}, timeout=10)
+            resp.raise_for_status()
+            _TEAM_MAP = {t["id"]: t.get("abbreviation", "") for t in resp.json()["teams"]}
+            logger.info(f"  Loaded {len(_TEAM_MAP)} MLB team mappings")
+        except Exception as e:
+            logger.warning(f"  Failed to load team mappings: {e}")
+    return _TEAM_MAP
+
 
 def detect_new_player_ids_batch(pa_df, client) -> set[int]:
     """PA DataFrame의 batter/pitcher ID를 Supabase players와 비교하여 신규 ID 반환.
@@ -65,7 +82,7 @@ def fetch_player_from_mlb_api(player_id: int) -> Optional[dict]:
     """
     url = f"{MLB_API_BASE}/people/{player_id}"
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, params={"hydrate": "currentTeam"}, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         people = data.get('people', [])
@@ -74,12 +91,14 @@ def fetch_player_from_mlb_api(player_id: int) -> Optional[dict]:
             return None
 
         p = people[0]
+        team_map = _get_team_map()
+        team_id = p.get('currentTeam', {}).get('id', 0)
         return {
             'player_id': player_id,
             'first_name': p.get('firstName', ''),
             'last_name': p.get('lastName', ''),
             'full_name': p.get('fullName', f'Player {player_id}'),
-            'team': p.get('currentTeam', {}).get('abbreviation', ''),
+            'team': team_map.get(team_id, ''),
             'position': p.get('primaryPosition', {}).get('abbreviation', ''),
         }
     except (requests.RequestException, KeyError, ValueError) as e:
