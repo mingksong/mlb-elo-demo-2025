@@ -24,12 +24,12 @@ def detect_new_player_ids_batch(pa_df, client) -> set[int]:
     Returns:
         Supabase에 등록되지 않은 player_id set
     """
-    # PA에서 모든 선수 ID 수집
+    # PA에서 모든 선수 ID 수집 (numpy int64 → Python int 변환)
     pa_ids = set()
     if 'batter_id' in pa_df.columns:
-        pa_ids.update(pa_df['batter_id'].dropna().astype(int).unique())
+        pa_ids.update(int(x) for x in pa_df['batter_id'].dropna().unique())
     if 'pitcher_id' in pa_df.columns:
-        pa_ids.update(pa_df['pitcher_id'].dropna().astype(int).unique())
+        pa_ids.update(int(x) for x in pa_df['pitcher_id'].dropna().unique())
 
     if not pa_ids:
         return set()
