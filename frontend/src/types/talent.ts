@@ -72,7 +72,7 @@ export interface TalentLeaderboardPlayer {
   player_id: number;
   season_elo: number;
   career_elo: number;
-  pa_count: number;
+  season_pa: number;
   full_name: string;
   team: string;
   position: string;

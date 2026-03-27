@@ -92,7 +92,7 @@ function TalentLeaderboardRow({
       <td className={`px-4 py-3 text-sm font-bold text-right ${tierColor}`}>
         {Math.round(player.season_elo)}
       </td>
-      <td className="px-4 py-3 text-sm text-right text-gray-500">{player.pa_count}</td>
+      <td className="px-4 py-3 text-sm text-right text-gray-500">{player.season_pa}</td>
       <td className="px-4 py-3 text-sm text-right text-gray-500">
         {topPercent !== null ? `${topPercent}%` : '—'}
       </td>

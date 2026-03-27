@@ -36,38 +36,25 @@ export interface TalentLeaderboardParams {
 export async function getTalentLeaderboard(params: TalentLeaderboardParams): Promise<TalentLeaderboardPlayer[]> {
   const { talentType, playerRole, page = 1, limit = 20, season } = params;
   const offset = (page - 1) * limit;
+  const currentYear = season ?? new Date().getFullYear();
 
-  const selectFields = season
-    ? 'player_id, season_elo, career_elo, pa_count, players!inner(full_name, team, position, player_elo!inner(last_game_date))'
-    : 'player_id, season_elo, career_elo, pa_count, players!inner(full_name, team, position)';
+  const { data, error } = await supabase.rpc('get_talent_leaderboard', {
+    p_talent_type: talentType,
+    p_player_role: playerRole,
+    p_season: currentYear,
+    p_limit: limit,
+    p_offset: offset,
+  });
 
-  let query = supabase
-    .from('talent_player_current')
-    .select(selectFields)
-    .eq('talent_type', talentType)
-    .eq('player_role', playerRole)
-    .order('season_elo', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (season) {
-    query = query
-      .gte('players.player_elo.last_game_date', `${season}-01-01`)
-      .lte('players.player_elo.last_game_date', `${season}-12-31`);
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).map((row: Record<string, unknown>) => {
-    const p = row.players as Record<string, unknown>;
-    return {
-      player_id: row.player_id as number,
-      season_elo: row.season_elo as number,
-      career_elo: row.career_elo as number,
-      pa_count: row.pa_count as number,
-      full_name: p.full_name as string,
-      team: p.team as string,
-      position: p.position as string,
-    };
-  });
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    player_id: row.player_id as number,
+    season_elo: row.season_elo as number,
+    career_elo: row.career_elo as number,
+    season_pa: (row.season_pa as number) ?? 0,
+    full_name: row.full_name as string,
+    team: row.team as string,
+    position: row.position as string,
+  }));
 }

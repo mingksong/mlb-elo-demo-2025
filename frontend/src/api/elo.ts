@@ -71,7 +71,7 @@ export interface LeaderboardPlayer {
   composite_elo: number;
   batting_elo: number;
   pitching_elo: number;
-  pa_count: number;
+  season_pa: number;
   batting_pa: number;
   pitching_pa: number;
   last_game_date: string;
@@ -83,45 +83,31 @@ export interface LeaderboardPlayer {
 export async function getLeaderboard(params: LeaderboardParams): Promise<LeaderboardPlayer[]> {
   const { position, page = 1, limit = 20, season } = params;
   const offset = (page - 1) * limit;
+  const role = position === 'pitcher' ? 'pitcher' : 'batter';
+  const currentYear = season ?? new Date().getFullYear();
 
-  // Sort by role-appropriate ELO
-  const sortColumn = position === 'pitcher' ? 'pitching_elo' : 'batting_elo';
-  // Filter by role-specific PA > 0 (TWP appear in both tabs)
-  const paColumn = position === 'pitcher' ? 'pitching_pa' : 'batting_pa';
-
-  let query = supabase
-    .from('player_elo')
-    .select('player_id, composite_elo, batting_elo, pitching_elo, pa_count, batting_pa, pitching_pa, last_game_date, players!inner(full_name, team, position)')
-    .gt(paColumn, 0)
-    .order(sortColumn, { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (season) {
-    query = query
-      .gte('last_game_date', `${season}-01-01`)
-      .lte('last_game_date', `${season}-12-31`);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc('get_leaderboard', {
+    p_role: role,
+    p_season: currentYear,
+    p_limit: limit,
+    p_offset: offset,
+  });
 
   if (error) throw error;
 
-  return (data ?? []).map((row: Record<string, unknown>) => {
-    const p = row.players as Record<string, unknown>;
-    return {
-      player_id: row.player_id as number,
-      composite_elo: row.composite_elo as number,
-      batting_elo: (row.batting_elo as number) ?? 1500,
-      pitching_elo: (row.pitching_elo as number) ?? 1500,
-      pa_count: row.pa_count as number,
-      batting_pa: (row.batting_pa as number) ?? 0,
-      pitching_pa: (row.pitching_pa as number) ?? 0,
-      last_game_date: row.last_game_date as string,
-      full_name: p.full_name as string,
-      team: p.team as string,
-      position: p.position as string,
-    };
-  });
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    player_id: row.player_id as number,
+    composite_elo: row.composite_elo as number,
+    batting_elo: (row.batting_elo as number) ?? 1500,
+    pitching_elo: (row.pitching_elo as number) ?? 1500,
+    season_pa: (row.season_pa as number) ?? 0,
+    batting_pa: (row.batting_pa as number) ?? 0,
+    pitching_pa: (row.pitching_pa as number) ?? 0,
+    last_game_date: row.last_game_date as string,
+    full_name: row.full_name as string,
+    team: row.team as string,
+    position: row.position as string,
+  }));
 }
 
 export async function getPlayerElo(playerId: string): Promise<PlayerElo & { player: Player }> {

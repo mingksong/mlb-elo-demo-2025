@@ -58,7 +58,7 @@ export default function LeaderboardTable({ players, isLoading = false, startRank
 function LeaderboardRow({ player, rank, position }: { player: LeaderboardPlayer; rank: number; position?: string }) {
   const navigate = useNavigate();
   const roleElo = position === 'pitcher' ? player.pitching_elo : player.batting_elo;
-  const rolePa = position === 'pitcher' ? player.pitching_pa : player.batting_pa;
+  const rolePa = player.season_pa;
   const tier = getEloTier(roleElo);
   const tierColor = getEloTierColor(tier);
   const isTwoWay = player.batting_pa > 0 && player.pitching_pa > 0;
